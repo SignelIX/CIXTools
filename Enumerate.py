@@ -714,7 +714,7 @@ class EnumerationUI():
         rxnschemefile = st.text_input(value=rootpath + 'RxnSchemes.json', label='rxscheme')
 
         col1, col2 = st.columns(2)
-        lspath = st.text_input(value=rootpath, label='lspath')
+        lspath = st.text_input(value=rootpath, label='scheme path')
         ls = lspath.replace(rootpath, '')
         bbpath = lspath + '/BBLists'
         f = open(rxnschemefile, 'r')
@@ -787,3 +787,8 @@ class EnumerationUI():
     def RunUI(self, smilescol, rootpath):
         self.head()
         self.body(smilescol, rootpath)
+
+if __name__=="__main__":
+    if st._is_running_with_streamlit:
+        enum = EnumerationUI ()
+        enum.RunUI ('SMILES', '')
