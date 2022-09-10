@@ -33,7 +33,11 @@ class CIXTools_MainUI:
         self.body ()
 
 
-if __name__=="__main__":
-    if st._is_running_with_streamlit:
-        cim = CIXTools_MainUI()
-        cim.RunUI()
+with st.echo(code_location='below'):
+    cim = CIXTools_MainUI()
+    cim.RunUI()
+
+# if __name__=="__main__":
+#     if st._is_running_with_streamlit:
+#         cim = CIXTools_MainUI()
+#         cim.RunUI()
