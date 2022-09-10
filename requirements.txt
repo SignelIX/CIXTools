@@ -1,3 +1,4 @@
+rdkit-pypi=2022.03.1
 altair @ file:///tmp/build/80754af9/altair_1599835197802/work
 appnope @ file:///opt/concourse/worker/volumes/live/4f734db2-9ca8-4d8b-5b29-6ca15b4b4772/volume/appnope_1606859466979/work
 argon2-cffi @ file:///opt/concourse/worker/volumes/live/4afd07c8-7fc3-4a09-6326-d8c70269eb33/volume/argon2-cffi_1613037490059/work
@@ -113,7 +114,6 @@ pytz @ file:///tmp/build/80754af9/pytz_1612215392582/work
 PyYAML==5.4.1
 pyzmq @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_15f7a459-ad98-422b-b8da-cbf1f626e2115nt0ocwy/croots/recipe/pyzmq_1657724193704/work
 rdeditor==0.1
-rdkit-pypi
 requests @ file:///tmp/build/80754af9/requests_1629994808627/work
 rich @ file:///opt/conda/conda-bld/rich_1641600379360/work
 ruamel-yaml-conda @ file:///opt/concourse/worker/volumes/live/da6f10aa-e617-4894-45a9-cfdf5da681c3/volume/ruamel_yaml_1616016690897/work
