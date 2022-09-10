@@ -1,7 +1,7 @@
 import streamlit as st
 import Enumerate
 
-class CIXTolls_MainUI:
+class CIXTools_MainUI:
     def __init__(self):
         st.session_state['MAIN'] = True
     def head(self):
@@ -35,5 +35,5 @@ class CIXTolls_MainUI:
 
 if __name__=="__main__":
     if st._is_running_with_streamlit:
-        cim = CIXTolls_MainUI()
+        cim = CIXTools_MainUI()
         cim.RunUI()
