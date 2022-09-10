@@ -1,5 +1,6 @@
 import streamlit as st
 import Enumerate
+from rdkit import Chem
 
 class CIXTools_MainUI:
     def __init__(self):
@@ -13,19 +14,19 @@ class CIXTools_MainUI:
                     )
     def body (self):
         st.session_state['MAIN'] = False
-        if 'ENUM' in st.session_state and st.session_state['ENUM'] == True:
-            enum = Enumerate.EnumerationUI()
-            enum.RunUI('SMILES', '')
-        elif 'CHEMSPACE' in st.session_state and st.session_state['CHEMSPACE'] == True:
-            st.write ('not implemented')
-        else:
-            st.session_state['MAIN'] = True
-            testenum = st.button(label='Test Enumerator', key='ENUM')
-            if testenum:
-                st.session_state['Page'] = 'ENUM'
-            chemspace = st.button(label='Display Chemical Space', key='CHEMSPACE')
-            if chemspace:
-                st.session_state['Page'] = 'CHEMSPACE'
+        # if 'ENUM' in st.session_state and st.session_state['ENUM'] == True:
+        #     enum = Enumerate.EnumerationUI()
+        #     enum.RunUI('SMILES', '')
+        # elif 'CHEMSPACE' in st.session_state and st.session_state['CHEMSPACE'] == True:
+        #     st.write ('not implemented')
+        # else:
+        #     st.session_state['MAIN'] = True
+        #     testenum = st.button(label='Test Enumerator', key='ENUM')
+        #     if testenum:
+        #         st.session_state['Page'] = 'ENUM'
+        #     chemspace = st.button(label='Display Chemical Space', key='CHEMSPACE')
+        #     if chemspace:
+        #         st.session_state['Page'] = 'CHEMSPACE'
 
     def RunUI (self):
         self.head ()
