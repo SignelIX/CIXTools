@@ -1,0 +1,66 @@
+
+{
+  "LIB1":
+  {
+	  "steps": [
+		{
+			"Reactants": ["CN","r0"],
+			"Rxns":
+			{
+				"sub1":"rxn1",
+				"sub2":"rxn2",
+				"sub3":["rxn3", "rxn4"]
+			}
+			
+		},
+		{
+			"Reactants": ["p","r1"],
+			"Rxns":
+			{
+				"default":"rxn1"
+			}
+		},
+		{
+			"Reactants": ["p","None"],
+			"Rxns":
+			{
+				"default":"rxn1"
+			}
+		},
+		{
+			"Reactants":["p","r2"],
+			"Rxns":
+			{
+				"default":"rxn1"
+			}
+		}
+	  ]
+  },
+  "LIB2":
+  {
+	  "steps": [
+		{
+			"Reactants": ["CN","r0"],
+			"Rxns":
+			{
+				"default":"rxn1"
+			}			
+		},
+		{
+			"Reactants": ["p","None"],
+			"Rxns":
+			{
+				"deprotect sub1":"deprotect rxn1",
+				"product":"product"
+			}
+		},
+		{
+			"Reactants": ["p","r1"],
+			"Rxns":
+			{
+				"default":["rxn1"]
+			}
+		}
+	  ]
+  }
+}

@@ -1,0 +1,33 @@
+
+{
+  "Deprotection":
+  {
+	  "steps": [
+		{
+			"Reactants": ["r0","None"],
+			"Rxns":
+			{
+				"[N,C;R0]C(=O)O[CX4;H2]c1[c;H1][c;H1][c;H1][c;H1][c;H1]1":"[N,C;R0:1]C(=O)O[CX4;H2]c1[c;H1][c;H1][c;H1][c;H1][c;H1]1>>[N,C:1]",
+				"[NX3;H0,H1]C(=O)OCC1c2ccccc2c3ccccc13":"[#7:1]-[#6](=O)-[#8]-[#6]-[#6]-1-c2[cH1][cH1][cH1][cH1]c2c2[cH1][cH1][cH1][cH1]c-12>>[#7:1]",
+				"NC(=O)(OC([CX4;H3])([CX4;H3])[CX4;H3])":"[N:1]C(=O)(OC([CX4;H3])([CX4;H3])[CX4;H3])>>[N:1]",
+				"[C;R1]1=[C;R1][C;R1]=[C;R1][C;R1]=[C;R1]1OCC(=O)[N,C]":"C1=CC=CC=C1OCC(=O)[N,C:1]>>[N,C:1]",
+				"product":"product"
+			}
+		}
+	  ]
+  },
+  "Deprotect_KeepBoth":
+  {
+	  "steps": [
+		{
+			"Reactants": ["r0","None"],
+			"Rxns":
+			{
+				"[CX4;H3][CX4;H2]O(C=O)":"CC[O:1]([C:2]=O)>>[O:1]([C:2]=O)",
+				"[CX4;H3]O(C=O)":"C[O:1]([C:2]=O)>>[O:1]([C:2]=O)",
+				"product":"product"
+			}
+		}
+	  ]
+  }
+}

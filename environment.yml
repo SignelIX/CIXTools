@@ -1,0 +1,13 @@
+name: SignelIx_CIx
+channels:
+    - conda-forge
+    - bioconda
+    - bokeh
+    - defaults
+    - rdkit
+prefix: /Users/eric/opt/anaconda3/envs/SignelIX_CIx/envs/SignelIx_CIx
+
+dependencies:
+    - pip
+    - beautifulsoup4=4.10
+   

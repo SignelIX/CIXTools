@@ -1,0 +1,17 @@
+channels:
+    - conda-forge
+    - bioconda
+    - bokeh
+    - defaults
+    - rdkit
+prefix: /Users/eric/opt/anaconda3/envs/SignelIX_CIx/envs/SignelIx_CIx
+
+dependencies:
+    - pip
+    - pip:
+        - mkl-fft
+        - mkl-random
+        - msgpack
+        - mkl-service==2.4.0
+        - libarchive-c
+        - ruamel-yaml-conda
