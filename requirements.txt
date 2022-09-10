@@ -113,6 +113,7 @@ pytz @ file:///tmp/build/80754af9/pytz_1612215392582/work
 PyYAML==5.4.1
 pyzmq @ file:///private/var/folders/sy/f16zz6x50xz3113nwtb9bvq00000gp/T/abs_15f7a459-ad98-422b-b8da-cbf1f626e2115nt0ocwy/croots/recipe/pyzmq_1657724193704/work
 rdeditor==0.1
+rdkit
 requests @ file:///tmp/build/80754af9/requests_1629994808627/work
 rich @ file:///opt/conda/conda-bld/rich_1641600379360/work
 ruamel-yaml-conda @ file:///opt/concourse/worker/volumes/live/da6f10aa-e617-4894-45a9-cfdf5da681c3/volume/ruamel_yaml_1616016690897/work
