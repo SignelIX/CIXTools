@@ -1,5 +1,5 @@
 import streamlit as st
-import Enumerate
+#import Enumerate
 from rdkit import Chem
 
 class CIXTools_MainUI:
