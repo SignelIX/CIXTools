@@ -1,5 +1,5 @@
 rdkit-pypi
-altair @ file:///tmp/build/80754af9/altair_1599835197802/work
+altair
 appnope @ file:///opt/concourse/worker/volumes/live/4f734db2-9ca8-4d8b-5b29-6ca15b4b4772/volume/appnope_1606859466979/work
 argon2-cffi @ file:///opt/concourse/worker/volumes/live/4afd07c8-7fc3-4a09-6326-d8c70269eb33/volume/argon2-cffi_1613037490059/work
 attrs @ file:///opt/conda/conda-bld/attrs_1642510447205/work
