@@ -16,23 +16,23 @@ class CIXTools_MainUI:
                     )
     def body (self):
         st.session_state['MAIN'] = False
-        compound_smiles = 'c1cc(C(=O)O)c(OC(=O)C)cc1'
-        m = Chem.MolFromSmiles(compound_smiles)
-        im = Draw.MolToImage(m)
-        st.image(im)
-        # if 'ENUM' in st.session_state and st.session_state['ENUM'] == True:
-        #     enum = Enumerate.EnumerationUI()
-        #     enum.RunUI('SMILES', '')
-        # elif 'CHEMSPACE' in st.session_state and st.session_state['CHEMSPACE'] == True:
-        #     st.write ('not implemented')
-        # else:
-        #     st.session_state['MAIN'] = True
-        #     testenum = st.button(label='Test Enumerator', key='ENUM')
-        #     if testenum:
-        #         st.session_state['Page'] = 'ENUM'
-        #     chemspace = st.button(label='Display Chemical Space', key='CHEMSPACE')
-        #     if chemspace:
-        #         st.session_state['Page'] = 'CHEMSPACE'
+        # compound_smiles = 'c1cc(C(=O)O)c(OC(=O)C)cc1'
+        # m = Chem.MolFromSmiles(compound_smiles)
+        # im = Draw.MolToImage(m)
+        # st.image(im)
+        if 'ENUM' in st.session_state and st.session_state['ENUM'] == True:
+            enum = Enumerate.EnumerationUI()
+            enum.RunUI('SMILES', '')
+        elif 'CHEMSPACE' in st.session_state and st.session_state['CHEMSPACE'] == True:
+            st.write ('not implemented')
+        else:
+            st.session_state['MAIN'] = True
+            testenum = st.button(label='Test Enumerator', key='ENUM')
+            if testenum:
+                st.session_state['Page'] = 'ENUM'
+            chemspace = st.button(label='Display Chemical Space', key='CHEMSPACE')
+            if chemspace:
+                st.session_state['Page'] = 'CHEMSPACE'
 
     def RunUI (self):
         self.head ()
