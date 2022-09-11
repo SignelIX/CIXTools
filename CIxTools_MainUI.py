@@ -2,7 +2,7 @@ import streamlit as st
 from rdkit import Chem
 from rdkit.Chem import Draw
 from PIL import Image
-#import Enumerate
+import Enumerate
 
 class CIXTools_MainUI:
     def __init__(self):
@@ -16,15 +16,9 @@ class CIXTools_MainUI:
                     )
     def body (self):
         st.session_state['MAIN'] = False
-        import streamlit as st
-        from rdkit import Chem
-        from rdkit.Chem import Draw
-        from PIL import Image
-
         compound_smiles = 'c1cc(C(=O)O)c(OC(=O)C)cc1'
         m = Chem.MolFromSmiles(compound_smiles)
         im = Draw.MolToImage(m)
-
         st.image(im)
         # if 'ENUM' in st.session_state and st.session_state['ENUM'] == True:
         #     enum = Enumerate.EnumerationUI()
@@ -48,7 +42,7 @@ class CIXTools_MainUI:
 with st.echo(code_location='below'):
     st.text ('Hello')
 
-# if __name__=="__main__":
-#     if st._is_running_with_streamlit:
-#         cim = CIXTools_MainUI()
-#         cim.RunUI()
+if __name__=="__main__":
+    if st._is_running_with_streamlit:
+        cim = CIXTools_MainUI()
+        cim.RunUI()
