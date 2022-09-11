@@ -22,7 +22,6 @@ colorama
 commonmark
 conda==4.1.6
 conda-build
-conda-package-handling
 cryptography
 cycler==0.10.0
 cytoolz==0.11.0
