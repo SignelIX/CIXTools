@@ -19,8 +19,8 @@ click
 cloudpickle
 colorama
 commonmark
-conda==4.10.3
-conda-build==3.21.5
+conda
+conda-build
 conda-package-handling
 cryptography
 cycler==0.10.0
