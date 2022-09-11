@@ -19,7 +19,7 @@ click
 cloudpickle
 colorama
 commonmark
-conda
+conda==4.2.7
 conda-build
 conda-package-handling
 cryptography
