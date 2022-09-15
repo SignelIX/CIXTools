@@ -655,13 +655,25 @@ class Enumerate:
         return full_df
 
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile):
-        enum = Enumerate.Enumerate()
+        enum = Enumerate()
         res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, True)
         return res[0]
 
+    def Enumerate_Dummy_Scaffold (self, rxnschemefile, schemename, bbsmiles, rxtntnum):
+        scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, FullInfo=True)
+        if 'scaffold_dummy_structures' not in scheme:
+            return'FAIL'
+        else:
+            inrxtnts = scheme['scaffold_dummy_structures']
+            if bbsmiles is not None and rxtntnum is not None:
+                inrxtnts [rxtntnum] = bbsmiles
+            p, prod_ct, [scheme, rxtants] =  self.RunRxnScheme(inrxtnts, rxnschemefile, schemename, False)
+            return p
+
+
 class EnumerationUI():
     enum = Enumerate()
-
+    rootpath =''
     def head(self):
         st.markdown("""
             <h1 style='text-align: center; margin-bottom: -35px;'>
@@ -710,12 +722,13 @@ class EnumerationUI():
 
         return df1, df2, df3
 
-    def body(self, smilescol, rootpath):
-        rxnschemefile = st.text_input(value=rootpath + 'RxnSchemes.json', label='rxscheme')
-
+    def body(self):
+        smilescol='SMILES'
+        rxnschemefile = st.text_input(value=self.rootpath + 'RxnSchemes.json', label='rxscheme')
+        print (self.rootpath, rxnschemefile)
         col1, col2 = st.columns(2)
-        lspath = st.text_input(value=rootpath, label='scheme path')
-        ls = lspath.replace(rootpath, '')
+        lspath = st.text_input(value=self.rootpath, label='scheme path')
+        ls = lspath.replace(self.rootpath, '')
         bbpath = lspath + '/BBLists'
         f = open(rxnschemefile, 'r')
         schemejson = json.load(f)
@@ -751,8 +764,8 @@ class EnumerationUI():
                 lsidx = schemelist.index(ls)
             schemename = st.selectbox(label='Scheme', options=schemelist, key='scheme', index=lsidx)
             if schemename != st.session_state['schemename']:
-                df1, df2, df3 = self.UpdateBBDfs(rootpath + schemename + '/BBLists', True)
-                print(len(df2), len(df3), schemename)
+                df1, df2, df3 = self.UpdateBBDfs(self.rootpath + schemename + '/BBLists', True)
+
 
             st.session_state['schemename'] = schemename
 
@@ -784,11 +797,12 @@ class EnumerationUI():
         if st.button('Export Random Selection'):
             enumfile = self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
 
-    def RunUI(self, smilescol, rootpath):
+    def RunUI(self):
+
         self.head()
-        self.body(smilescol, rootpath)
+        self.body()
 
 if __name__=="__main__":
     if st._is_running_with_streamlit:
         enum = EnumerationUI ()
-        enum.RunUI ('SMILES', '')
+        enum.RunUI ()
