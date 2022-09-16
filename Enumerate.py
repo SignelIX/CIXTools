@@ -16,6 +16,7 @@ from rdkit.Chem import SaltRemover
 import pathlib
 from tqdm import tqdm
 import streamlit as st
+import matplotlib.pyplot as plt
 
 class Enumerate:
     rxndict = {}
@@ -74,15 +75,20 @@ class Enumerate:
         for r in reactants:
             MolDisplay.ShowMol (r)
 
-    def ReadRxnScheme (self, fname, schemename, verbose = True, FullInfo = False):
+    def ReadRxnScheme (self, fname_json, schemename, verbose = True, FullInfo = False):
         try:
-            f = open (fname)
-            data = json.load (f)
-            f.close ()
-        except Exception as E:
-            if verbose:
-                print ('json read error:', str(E))
-            return None, None
+            data = {}
+            data[schemename] = json.loads(fname_json)
+            print ('here')
+        except Exception as e:
+            try:
+                f = open (fname_json)
+                data = json.load (f)
+                f.close ()
+            except Exception as E:
+                if verbose:
+                    print ('json read error:', str(E))
+                return None, None
         if schemename not in data:
             if verbose:
                 print('schemename error:', schemename)
@@ -174,12 +180,12 @@ class Enumerate:
             for subtype in subtypes:
                 self.rxndict [subtype]= subtypes [subtype]['smarts']
 
-    def RunRxnScheme (self, in_reactants, schemefile, schemename, showmols, schemeinfo = None):
+    def RunRxnScheme (self, in_reactants, schemefile_jsontext, schemename, showmols, schemeinfo = None):
 
         if schemeinfo is not None:
             scheme, rxtants = [schemeinfo[0], schemeinfo [1]]
         else:
-            scheme, rxtants = self.ReadRxnScheme(schemefile, schemename)
+            scheme, rxtants = self.ReadRxnScheme(schemefile_jsontext, schemename)
 
         if scheme is None:
             return 'NOSCHEMEFAIL'
@@ -673,7 +679,17 @@ class Enumerate:
 
 class EnumerationUI():
     enum = Enumerate()
-    rootpath =''
+    rootpath = ''
+    initpath = '../CIXTools.init.json'
+
+    def __init__ (self):
+        f = open(self.initpath)
+        initjson = json.load(f)
+        f.close ()
+        if 'schemedef' not in st.session_state:
+            st.session_state ['scheme_def'] = ''
+        self.rootpath = initjson ['lastrootpath']
+
     def head(self):
         st.markdown("""
             <h1 style='text-align: center; margin-bottom: -35px;'>
@@ -722,12 +738,33 @@ class EnumerationUI():
 
         return df1, df2, df3
 
+    def SaveToInit(self):
+        with open(self.initpath, "r") as jsonFile:
+            data = json.load(jsonFile)
+        data["lastrootpath"] = st.session_state.rxscheme.replace ('RxnSchemes.json', '')
+        data["lastschemedef"] = st.session_state.schemedef
+        data["lastschemepath"] = st.session_state.schemepath
+        with open(self.initpath, "w") as jsonFile:
+            json.dump(data, jsonFile)
+
+    def SetScheme (self):
+        print ('Set Scheme', st.session_state.scheme)
+        with open(st.session_state.rxscheme, "r") as jsonFile:
+            data = json.load(jsonFile)
+            st.session_state.schemedef = json.dumps(data [st.session_state.scheme], indent=4)
+        self.SaveToInit()
+
+
     def body(self):
         smilescol='SMILES'
-        rxnschemefile = st.text_input(value=self.rootpath + 'RxnSchemes.json', label='rxscheme')
-        print (self.rootpath, rxnschemefile)
-        col1, col2 = st.columns(2)
-        lspath = st.text_input(value=self.rootpath, label='scheme path')
+        rxnschemefile = st.text_input(value=self.rootpath + 'RxnSchemes.json', label='rxscheme', on_change=self.SaveToInit, key='rxscheme')
+        if os.path.exists(rxnschemefile) == False:
+            st.text (rxnschemefile + ' does not exist. Please adjust path')
+            return
+
+        lspath = st.text_input(value=self.rootpath, label='scheme path', on_change=self.SaveToInit, key = 'schemepath')
+
+
         ls = lspath.replace(self.rootpath, '')
         bbpath = lspath + '/BBLists'
         f = open(rxnschemefile, 'r')
@@ -735,7 +772,6 @@ class EnumerationUI():
         schemelist = []
 
         if 'schemename' not in st.session_state:
-            print(ls)
             st.session_state['schemename'] = ls
 
         for s in schemejson:
@@ -748,26 +784,44 @@ class EnumerationUI():
             st.session_state['bb2idx'] = 0
         if 'bb3idx' not in st.session_state:
             st.session_state['bb3idx'] = 0
+        cont1 = st.container ()
 
-        if st.button('random'):
-            if df1 is not None:
-                st.session_state['bb1idx'] = df1.index[random.randint(0, len(df1))]
-            if df2 is not None:
-                st.session_state['bb2idx'] = df2.index[random.randint(0, len(df2))]
-            if df3 is not None:
-                st.session_state['bb3idx'] = df3.index[random.randint(0, len(df3))]
+        col1, col2, col3 = st.columns(3)
+        Enumerate = False
+        with col1:
+            if st.button('random'):
+                if df1 is not None:
+                    st.session_state['bb1idx'] = df1.index[random.randint(0, len(df1))]
+                if df2 is not None:
+                    st.session_state['bb2idx'] = df2.index[random.randint(0, len(df2))]
+                if df3 is not None:
+                    st.session_state['bb3idx'] = df3.index[random.randint(0, len(df3))]
+                Enumerate = True
 
+        with col2:
+            if st.button('enumerate'):
+                Enumerate = True
+
+        with col3:
+            if st.button('Export Random Selection'):
+                self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
+
+        col1, col2 = st.columns(2)
         with col1:
             if ls not in schemelist:
                 lsidx = 0
             else:
                 lsidx = schemelist.index(ls)
+
             schemename = st.selectbox(label='Scheme', options=schemelist, key='scheme', index=lsidx)
+
             if schemename != st.session_state['schemename']:
                 df1, df2, df3 = self.UpdateBBDfs(self.rootpath + schemename + '/BBLists', True)
-
+                self.SetScheme()
 
             st.session_state['schemename'] = schemename
+            if 'schemedef' not in st.session_state:
+                self.SetScheme()
 
             if df1 is not None:
                 rxtnt1 = st.text_input(key='bb1txt', label='bb1 (override)')
@@ -785,22 +839,31 @@ class EnumerationUI():
                     rxtnt3 = st.selectbox(label='bb3', options=df3[smilescol], key='bb3',
                                           index=st.session_state['bb3idx'])
 
-        if st.button('enumerate'):
-            rxtnts = [rxtnt1, rxtnt2, rxtnt3]
-            res = self.enum.TestReactionScheme(schemename, rxtnts, rxnschemefile)
-            st.pyplot(MolDisplay.ShowMols(rxtnts))
+        if Enumerate == True:
             with col2:
-                st.write(schemename)
-                st.write(res)
-                st.pyplot(MolDisplay.ShowMol(res))
+                rxtnts = [rxtnt1, rxtnt2, rxtnt3]
+                try:
+                    res = self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef)
+                    st.pyplot(MolDisplay.ShowMols(rxtnts))
+                    if res is None or res == 'FAIL':
+                        fig = plt.figure()
+                        st.pyplot(fig)
+                    else:
+                        st.pyplot(MolDisplay.ShowMol(res))
+                except:
+                    st.text ('Error: bad scheme definition')
 
-        if st.button('Export Random Selection'):
-            enumfile = self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
+
+        with cont1:
+            st.text_area(height=200, label='Scheme Definition', key='schemedef')
+
+
 
     def RunUI(self):
 
         self.head()
         self.body()
+
 
 if __name__=="__main__":
     if st._is_running_with_streamlit:
