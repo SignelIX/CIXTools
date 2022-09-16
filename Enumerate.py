@@ -742,8 +742,10 @@ class EnumerationUI():
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
         data["lastrootpath"] = st.session_state.rxscheme.replace ('RxnSchemes.json', '')
-        data["lastschemedef"] = st.session_state.schemedef
-        data["lastschemepath"] = st.session_state.schemepath
+        if 'schemedef' in st.session_state:
+            data["lastschemedef"] = st.session_state.schemedef
+        if 'schemepath' in st.session_state:
+            data["lastschemepath"] = st.session_state.schemepath
         with open(self.initpath, "w") as jsonFile:
             json.dump(data, jsonFile)
 
@@ -751,9 +753,17 @@ class EnumerationUI():
         print ('Set Scheme', st.session_state.scheme)
         with open(st.session_state.rxscheme, "r") as jsonFile:
             data = json.load(jsonFile)
-            st.session_state.schemedef = json.dumps(data [st.session_state.scheme], indent=4)
-        self.SaveToInit()
+            st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
 
+    def SaveScheme (self):
+        print ('Save Scheme', st.session_state.scheme)
+        with open(st.session_state.rxscheme, "r") as jsonFile:
+            data = json.load(jsonFile)
+        schemejson = json.loads (st.session_state.schemedef)
+        data[st.session_state.scheme] = schemejson
+        print (data[st.session_state.scheme])
+        with open(st.session_state.rxscheme, "w") as jsonFile:
+            json.dump(data, jsonFile, indent=4)
 
     def body(self):
         smilescol='SMILES'
@@ -776,6 +786,7 @@ class EnumerationUI():
 
         for s in schemejson:
             schemelist.append(s)
+
         df1, df2, df3 = self.UpdateBBDfs(bbpath, False)
 
         if 'bb1idx' not in st.session_state:
@@ -784,83 +795,110 @@ class EnumerationUI():
             st.session_state['bb2idx'] = 0
         if 'bb3idx' not in st.session_state:
             st.session_state['bb3idx'] = 0
-        cont1 = st.container ()
+        with st.expander (label='Scheme Definition Tools'):
+            cont1 = st.container ()
+        cont2 = st.container()
+        cont3= st.container ()
 
-        col1, col2, col3 = st.columns(3)
+
         Enumerate = False
-        with col1:
-            if st.button('random'):
+        with cont1:
+            ccont = st.container()
+            ccontA = st.container ()
+            with ccontA:
+                newname = st.text_input(label = 'New Scheme Name' )
+                if st.button (label = 'Add New Scheme'):
+                    st.session_state.schemename= newname
+                    ls = newname
+                    st.session_state.scheme = newname
+                    st.session_state.schemedef = '{}'
+                    self.SaveScheme()
+                    schemelist.append (newname)
+
+        with cont3:
+            colx1, colx2 = st.columns(2)
+            with colx1:
+                if ls not in schemelist:
+                    lsidx = 0
+                else:
+                    lsidx = schemelist.index(ls)
+
+                schemename = st.selectbox(label='Scheme', options=schemelist, key='scheme', index=lsidx)
+
+                if schemename != st.session_state['schemename']:
+                    df1, df2, df3 = self.UpdateBBDfs(self.rootpath + schemename + '/BBLists', True)
+                    self.SetScheme()
+
+                st.session_state['schemename'] = schemename
+                if 'schemedef' not in st.session_state:
+                    self.SetScheme()
+
                 if df1 is not None:
-                    st.session_state['bb1idx'] = df1.index[random.randint(0, len(df1))]
+                    rxtnt1 = st.text_input(key='bb1txt', label='bb1 (override)')
+                    if rxtnt1 == '':
+                        rxtnt1 = st.selectbox(label='bb1', options=df1[smilescol], key='bb1',
+                                              index=st.session_state['bb1idx'])
                 if df2 is not None:
-                    st.session_state['bb2idx'] = df2.index[random.randint(0, len(df2))]
+                    rxtnt2 = st.text_input(key='bb2txt', label='bb2 (override)')
+                    if rxtnt2 == '':
+                        rxtnt2 = st.selectbox(label='bb2', options=df2[smilescol], key='bb2',
+                                              index=st.session_state['bb2idx'])
                 if df3 is not None:
-                    st.session_state['bb3idx'] = df3.index[random.randint(0, len(df3))]
-                Enumerate = True
+                    rxtnt3 = st.text_input(key='bb3txt', label='bb3 (override)')
+                    if rxtnt3 == '':
+                        rxtnt3 = st.selectbox(label='bb3', options=df3[smilescol], key='bb3',
+                                              index=st.session_state['bb3idx'])
 
-        with col2:
-            if st.button('enumerate'):
-                Enumerate = True
 
-        with col3:
-            if st.button('Export Random Selection'):
-                self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if ls not in schemelist:
-                lsidx = 0
-            else:
-                lsidx = schemelist.index(ls)
-
-            schemename = st.selectbox(label='Scheme', options=schemelist, key='scheme', index=lsidx)
-
-            if schemename != st.session_state['schemename']:
-                df1, df2, df3 = self.UpdateBBDfs(self.rootpath + schemename + '/BBLists', True)
-                self.SetScheme()
-
-            st.session_state['schemename'] = schemename
-            if 'schemedef' not in st.session_state:
-                self.SetScheme()
-
-            if df1 is not None:
-                rxtnt1 = st.text_input(key='bb1txt', label='bb1 (override)')
-                if rxtnt1 == '':
-                    rxtnt1 = st.selectbox(label='bb1', options=df1[smilescol], key='bb1',
-                                          index=st.session_state['bb1idx'])
-            if df2 is not None:
-                rxtnt2 = st.text_input(key='bb2txt', label='bb2 (override)')
-                if rxtnt2 == '':
-                    rxtnt2 = st.selectbox(label='bb2', options=df2[smilescol], key='bb2',
-                                          index=st.session_state['bb2idx'])
-            if df3 is not None:
-                rxtnt3 = st.text_input(key='bb3txt', label='bb3 (override)')
-                if rxtnt3 == '':
-                    rxtnt3 = st.selectbox(label='bb3', options=df3[smilescol], key='bb3',
-                                          index=st.session_state['bb3idx'])
-
-        if Enumerate == True:
-            with col2:
-                rxtnts = [rxtnt1, rxtnt2, rxtnt3]
-                try:
-                    res = self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef)
-                    st.pyplot(MolDisplay.ShowMols(rxtnts))
-                    if res is None or res == 'FAIL':
-                        fig = plt.figure()
-                        st.pyplot(fig)
-                    else:
-                        st.pyplot(MolDisplay.ShowMol(res))
-                except:
-                    st.text ('Error: bad scheme definition')
 
 
         with cont1:
-            st.text_area(height=200, label='Scheme Definition', key='schemedef')
+            ccol1, ccol2 = st.columns(2)
+            with ccol1:
+                if st.button (label='revert'):
+                    self.SetScheme()
+            with ccol2:
+                if st.button (label='save scheme'):
+                    self.SaveScheme()
+            with ccont:
+                st.text_area(height=200, label='Scheme Definition', key='schemedef')
 
+        with cont2:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button('random'):
+                    if df1 is not None:
+                        st.session_state['bb1idx'] = df1.index[random.randint(0, len(df1))]
+                    if df2 is not None:
+                        st.session_state['bb2idx'] = df2.index[random.randint(0, len(df2))]
+                    if df3 is not None:
+                        st.session_state['bb3idx'] = df3.index[random.randint(0, len(df3))]
+                    Enumerate = True
 
+            with col2:
+                if st.button('enumerate'):
+                    Enumerate = True
+
+            with col3:
+                if st.button('Export Random Selection'):
+                    self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
+
+        with cont3:
+            if Enumerate == True:
+                with colx2:
+                    rxtnts = [rxtnt1, rxtnt2, rxtnt3]
+                    try:
+                        res = self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef)
+                        st.pyplot(MolDisplay.ShowMols(rxtnts))
+                        if res is None or res == 'FAIL':
+                            fig = plt.figure()
+                            st.pyplot(fig)
+                        else:
+                            st.pyplot(MolDisplay.ShowMol(res))
+                    except:
+                        st.text ('Error: bad scheme definition')
 
     def RunUI(self):
-
         self.head()
         self.body()
 
