@@ -1,9 +1,9 @@
-import Diversity
+import Chem_Similarity_Diversity
 import pandas as pd
 import streamlit as st
 
 class Chem_SpaceVisualization:
-    div = Diversity.Diversity()
+    div = Chem_Similarity_Diversity.Diversity()
 
     def ChemicalSpace_UMap(self, outpath, outprefix, files_list, clr_list, in_pkl_file ):
         fig_file = outpath + outprefix + '.png'

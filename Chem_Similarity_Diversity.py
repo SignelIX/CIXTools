@@ -891,4 +891,11 @@ class Similarity:
         collection.close()
         outfile.close()
 
-
+class Sim_Div_UI:
+    def RunUI (self):
+        st.write ('not implemented')
+        return
+if __name__ == "__main__":
+    simdivui = Sim_Div_UI ()
+    if st._is_running_with_streamlit:
+        simdivui.RunUI ()

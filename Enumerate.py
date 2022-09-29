@@ -881,7 +881,7 @@ class EnumerationUI():
 
             with col3:
                 if st.button('Export Random Selection'):
-                    self.enum.EnumFromBBFiles(schemename, '', '', lspath, '', 5000, rxnschemefile)
+                    self.enum.EnumFromBBFiles(schemename, '', '', lspath, schemename, 5000, rxnschemefile)
 
         with cont3:
             if Enumerate == True:
