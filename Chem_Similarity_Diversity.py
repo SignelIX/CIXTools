@@ -726,7 +726,6 @@ class Similarity:
                 reslist.append ([row ['BB_ID'],  tnm, row ['SMILES']])
         reslist = sorted(reslist, key=operator.itemgetter(1), reverse=True)
         return reslist [0:retct]
-
     def TanimotoComparison (self, smiles1, smiles2 ):
         #currently hardcoded to Morgan2
         try:
@@ -741,7 +740,6 @@ class Similarity:
             tnm_score = -1
 
         return tnm_score
-
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
         id = splitstr[1]
@@ -890,6 +888,25 @@ class Similarity:
             print('joined')
         collection.close()
         outfile.close()
+    def FindClosestList_SimMatch (self, testlist, complists):
+        res = []
+        for c in complists:
+            sumtanscores = 0
+            tanct = 0
+            for t in testlist:
+                settanlist = []
+                for cs in c:
+                    tanscore = self.TanimotoComparison(t,cs)
+                    if tanscore == -1:
+                        print ('error')
+                    else:
+                        settanlist.append (tanscore)
+                maxtan = max(settanlist)
+                tanct += 1
+                sumtanscores += maxtan
+            res.append (sumtanscores/tanct)
+        return res
+
 
 class Sim_Div_UI:
     def RunUI (self):
