@@ -21,6 +21,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import operator
 import MolDisplay as md
 
+
 class Diversity:
     NUM_WORKERS = 16
     #ss_filters = None
