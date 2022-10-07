@@ -11,7 +11,7 @@ def ShowMol( smiles):
     plt.show()
     return plt
 
-def ShowMols( smiles_list, cols = 4):
+def ShowMols( smiles_list, cols = 4, subImgSize = (200,200)):
     print (smiles_list)
     list = []
     for smi in smiles_list:
@@ -21,7 +21,7 @@ def ShowMols( smiles_list, cols = 4):
             else:
                 list.append (smi)
     print (list)
-    img = Draw.MolsToGridImage(list, molsPerRow=cols, subImgSize=(200, 200) )
+    img = Draw.MolsToGridImage(list, molsPerRow=cols, subImgSize=subImgSize )
     img.save('test_mols.png')
     plt.imshow(img)
     plt.show()
