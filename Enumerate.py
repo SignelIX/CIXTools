@@ -19,6 +19,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import re
 import operator
+import sys
 
 
 class Enumerate:
@@ -48,23 +49,26 @@ class Enumerate:
             reacts = (m1, m2)
 
         for r in SM_rxn:
-            rxn = rdChemReactions.ReactionFromSmarts(r)
-            products = rxn.RunReactants(reacts)
-            if len(products) == 0:
-                product = None
+            if r == "product":
+                smi = r1
             else:
-                product = products [0][0]
-
-            smi = None
-
-            try:
-                if product is  None:
-                    smi = None
+                rxn = rdChemReactions.ReactionFromSmarts(r)
+                products = rxn.RunReactants(reacts)
+                if len(products) == 0:
+                    product = None
                 else:
-                    smi = Chem.MolToSmiles(product)
-                    break
-            except:
+                    product = products [0][0]
+
                 smi = None
+
+                try:
+                    if product is  None:
+                        smi = None
+                    else:
+                        smi = Chem.MolToSmiles(product)
+                        break
+                except:
+                    smi = None
 
         if showmols == True:
             if smi is not None:
@@ -194,9 +198,7 @@ class Enumerate:
         prod_ct = 1
         intermeds = []
         for step in scheme:
-
             stepname = step
-
             if type (scheme) == dict:
                 step = scheme [step]
             reactants, reaction = self.Pull_ReactionDetails (p, in_reactants, step, rxtants)
@@ -684,6 +686,7 @@ class Enumerate:
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile, retIntermeds = False):
         enum = Enumerate()
         res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, True)
+
         if not retIntermeds:
             return res[0]
         else:
@@ -851,11 +854,11 @@ class EnumerationUI():
                 for n in range (0, len(dfs)) :
                     df = dfs[n]
                     if df is not None:
-                        rxtnts[n] = st.text_input(key='bb' +str(n) + 'txt', label='bb' + str(n) + ' (override)')
+                        rxtnts[n] = st.text_input(key='bb' +str(n) + 'txt', label='BB' + str(n+1) + ' (override)')
 
                         if rxtnts[n] == '':
-                             rxtnts[n] = st.selectbox(label='bb' + str (n), options=dfs[n][smilescol]
-                                 , key='bb' + str (n),
+                             rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
+                                 , key='bb' + str (n ),
                                    index=st.session_state['bb' + str (n) + 'idx'])
 
         with cont1:
@@ -903,15 +906,21 @@ class EnumerationUI():
                 with colx2:
                     try:
                         res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef, True)
-                        st.pyplot(MolDisplay.ShowMols(rxtnts))
-                        st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
                         if res is None or res == 'FAIL':
                             fig = plt.figure()
-                            st.pyplot(fig)
+                            st.text ('Reaction Failure')
                         else:
                             st.pyplot(MolDisplay.ShowMol(res))
-                    except:
+                        with st.expander(label='Reaction Info'):
+                            st.pyplot(MolDisplay.ShowMols(rxtnts))
+                            st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
+
+                    except Exception as e:
                         st.text ('Error: bad scheme definition')
+                        exc_type, exc_obj, exc_tb = sys.exc_info()
+                        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                        st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
+                        st.text (e)
 
     def RunUI(self):
         self.head()
