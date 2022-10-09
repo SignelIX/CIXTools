@@ -25,6 +25,7 @@ import sys
 class Enumerate:
     rxndict = {}
     def React_Molecules (self, r1, r2, SM_rxn, showmols):
+
         if showmols == True:
             print ('Reaction Params:')
             print(r1, r2, SM_rxn)
@@ -403,13 +404,15 @@ class Enumerate:
             return res
 
         def rec_bbpull(bdfs, level, cycct, bbslist, ct):
+            print ('RECPULL', level, cycct, len(bdfs))
             for i, b in bdfs[level].iterrows():
+                print (level)
                 bb = b['BB_ID']
                 bbs = b['SMILES']
                 bbslist.append(bb)
                 bbslist.append(bbs)
                 if level < cycct - 1:
-                    ct = rec_bbpull(bbdfs, level + 1, cycct, bbslist)
+                    ct = rec_bbpull(bdfs, level + 1, cycct, bbslist)
                 else:
                     print(bbslist)
                     ct += 1
@@ -417,6 +420,10 @@ class Enumerate:
                         print(ct, '/', fullct, end='\r')
                 return ct
 
+        if SMILEScolnames is None:
+            SMILEScolnames = []
+        if BBIDcolnames is None:
+            BBIDcolnames = []
         infilelist.sort ()
         print (infilelist)
         cycct = len (infilelist)
@@ -427,12 +434,16 @@ class Enumerate:
             for f in infilelist:
                 cycdict['BB' + str(ct)] = pd.read_csv(f)
                 changecoldict = {}
-                for smc in SMILEScolnames:
-                    if smc in cycdict['BB' + str(ct)].columns:
-                        changecoldict[smc] = 'SMILES'
-                for bbidc in BBIDcolnames:
-                    if bbidc in cycdict['BB' + str(ct)].columns:
-                        changecoldict[bbidc] = 'BB_ID'
+                if 'SMILES' not in cycdict['BB' + str(ct)].columns:
+                    for smc in SMILEScolnames:
+                        if smc in cycdict['BB' + str(ct)].columns:
+                            changecoldict[smc] = 'SMILES'
+                if 'BB_ID' not in cycdict['BB' + str(ct)].columns:
+                    for bbidc in BBIDcolnames:
+                        if bbidc in cycdict['BB' + str(ct)].columns:
+                            changecoldict[bbidc] = 'BB_ID'
+                if len (changecoldict.keys ()) > 0:
+                    cycdict['BB' + str(ct)] = cycdict['BB' + str(ct)].rename (columns=changecoldict)
                 ct += 1
 
             bdfs = [None] * cycct
@@ -444,7 +455,6 @@ class Enumerate:
             else:
                 for ix in range(0, cycct):
                     bdfs[ix] = cycdict['BB' + str(ix+1)]
-            print ('BDFS', len (bdfs), cycdict.keys ())
 
             ct = 0
             fullct = 1
@@ -454,8 +464,6 @@ class Enumerate:
             print('molecules to enumerate:', rndct)
             if rndct > fullct:
                 rndct = -1
-
-
 
             if rndct == -1:
                 reslist = [[]] * fullct
@@ -511,12 +519,15 @@ class Enumerate:
         else:
             return df
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None):
+    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = []):
         print ('inpath: ', inpath,  libname)
         bbspecprefix = ''
+        outspecprefix = ''
         if bbspec != '' and bbspec is not None:
-            bbspecprefix = bbspec + '.'
-        flist = pathlib.Path(inpath + libname + '/BBLists').glob(bbspecprefix + '*.csv')
+            outspecprefix = '/' + outspec
+        bbpath = inpath + libname + outspecprefix + '/BBLists'
+        print ('BBPATH', bbpath)
+        flist = pathlib.Path(bbpath).glob('*.' + bbspec + '*.csv')
         infilelist = []
 
         for f in flist:
@@ -525,6 +536,7 @@ class Enumerate:
             if result is not None:
                 infilelist.append (c)
         infilelist.sort ()
+        print ('INFILELIST', infilelist)
 
         if rxschemefile is None:
             rxschemefile = inpath + 'RxnSchemes.json'
@@ -532,9 +544,9 @@ class Enumerate:
         samplespath = inpath + foldername + '/Samples/'
         if not os.path.exists(samplespath):
             os.makedirs(samplespath)
-        outpath = inpath + foldername + '/Samples/' + libname + outspec
-        print('outpath:', outpath)
-        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile)
+        outpath = inpath + foldername + '/Samples/' + libname + '.' + outspec
+        print('outpath:', outpath, SMILEScolnames, BBcolnames)
+        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames)
         return outfile
 
     def FilterBBs(self, bbdict, filterfile):
@@ -707,6 +719,8 @@ class EnumerationUI():
     enum = Enumerate()
     rootpath = ''
     initpath = '../CIXTools.init.json'
+    smiles_colnames = None
+    bbid_colnames = None
 
     def __init__ (self):
         f = open(self.initpath)
@@ -726,6 +740,7 @@ class EnumerationUI():
                     )
 
     def UpdateBBDfs(self, inpath, do_reload):
+
         flist = pathlib.Path(inpath).glob('*.csv')
 
         bbfiles =  {}
@@ -736,15 +751,25 @@ class EnumerationUI():
             result = re.search(r'\.BB[0-9]+\.',  c)
             if result is  not None:
                 bbfiles [result.group(0)[3:4]] = c
-        print ('BBFILES', len(bbfiles), inpath)
         for k in bbfiles.keys ():
             dfs[k] = None
             if 'df' + str(k) not in st.session_state or do_reload:
                 if bbfiles[k] != '':
                     dfs [k] = pd.read_csv(bbfiles[k])
+                    if 'SMILES' not in dfs [k].columns and self.smiles_colnames is not None:
+                        for cn in self.smiles_colnames:
+                            if cn in dfs [k].columns:
+                                dfs[k] = dfs[k].rename(columns={cn:'SMILES'})
+                                break
+                    if 'BB_ID' not in dfs [k].columns and self.bbid_colnames is not None:
+                        for cn in self.bbid_colnames:
+                            if cn in dfs [k].columns:
+                                dfs[k] = dfs[k].rename(columns={cn:'BB_ID'})
+                                break
                     st.session_state['df' + str(k)] = dfs[k]
             else:
                 dfs[k] = st.session_state['df' + str(k)]
+            print (dfs[k].columns)
         dflist = sorted(dfs.items())
         dflist = [x[1] for x in dflist]
         return dflist
@@ -778,6 +803,7 @@ class EnumerationUI():
 
     def body(self):
         smilescol='SMILES'
+
         if 'specstr' not in st.session_state:
             st.session_state['specstr'] = 'Empty'
         rxnschemefile = st.text_input(value=self.rootpath + 'RxnSchemes.json', label='rxscheme', on_change=self.SaveToInit, key='rxscheme')
@@ -797,10 +823,16 @@ class EnumerationUI():
             st.session_state['schemename'] = ls
             bbpath =lspath +  '/BBLists'
         else:
-            bbpath = lspath + st.session_state['schemename'] + '/BBLists'
+            if 'specstr' in st.session_state:
+                specstr = '/' + st.session_state['specstr']
+            else:
+                specstr = ''
+            bbpath = lspath + st.session_state['schemename'] + specstr +  '/BBLists'
 
         for s in schemejson:
             schemelist.append(s)
+        schemelist.sort ()
+
         dfs = self.UpdateBBDfs(bbpath, False)
 
         with st.expander (label='Scheme Definition Tools'):
@@ -824,6 +856,8 @@ class EnumerationUI():
                     schemelist.append (newname)
 
         with cont3:
+            print ('CONT3')
+
             colx1, colx2 = st.columns(2)
             with colx1:
                 if ls not in schemelist:
@@ -838,6 +872,7 @@ class EnumerationUI():
                     addspec = ''
                     if spec != '' and spec is not None:
                         addspec = '/' + spec
+
                     dfs  = self.UpdateBBDfs(self.rootpath + schemename + addspec +'/BBLists', True)
                     self.SetScheme()
 
@@ -855,11 +890,11 @@ class EnumerationUI():
                     df = dfs[n]
                     if df is not None:
                         rxtnts[n] = st.text_input(key='bb' +str(n) + 'txt', label='BB' + str(n+1) + ' (override)')
-
                         if rxtnts[n] == '':
                              rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
                                  , key='bb' + str (n ),
                                    index=st.session_state['bb' + str (n) + 'idx'])
+                print ('RXTNTS', rxtnts)
 
         with cont1:
             ccol1, ccol2 = st.columns(2)
@@ -899,28 +934,30 @@ class EnumerationUI():
                     addspec = ''
                     if spec != '' and spec is not None:
                         addspec = '/' + spec
-                    self.enum.EnumFromBBFiles(schemename, '','', lspath, schemename + addspec, ct, rxnschemefile)
+                    self.enum.EnumFromBBFiles(schemename, spec, spec, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames)
 
         with cont3:
             if Enumerate == True:
                 with colx2:
-                    try:
-                        res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef, True)
-                        if res is None or res == 'FAIL':
-                            fig = plt.figure()
-                            st.text ('Reaction Failure')
-                        else:
-                            st.pyplot(MolDisplay.ShowMol(res))
-                        with st.expander(label='Reaction Info'):
-                            st.pyplot(MolDisplay.ShowMols(rxtnts))
-                            st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
+                    if rxtnts is None or len(rxtnts) == 0:
+                        st.text('Reactants not correctly loaded')
+                    else:
+                        try:
+                            res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef, True)
+                            if res is None or res == 'FAIL':
+                                st.text ('Reaction Failure')
+                            else:
+                                st.pyplot(MolDisplay.ShowMol(res))
+                            with st.expander(label='Reaction Info'):
+                                st.pyplot(MolDisplay.ShowMols(rxtnts))
+                                st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
 
-                    except Exception as e:
-                        st.text ('Error: bad scheme definition')
-                        exc_type, exc_obj, exc_tb = sys.exc_info()
-                        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-                        st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
-                        st.text (e)
+                        except Exception as e:
+                            st.text ('Error: bad scheme definition')
+                            exc_type, exc_obj, exc_tb = sys.exc_info()
+                            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                            st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
+                            st.text (e)
 
     def RunUI(self):
         self.head()

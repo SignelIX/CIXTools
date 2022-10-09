@@ -899,7 +899,7 @@ class Similarity:
                 for cs in c:
                     tanscore = self.TanimotoComparison(t,cs)
                     if tanscore == -1:
-                        print ('error')
+                        print ('error:', cs, t)
                     else:
                         settanlist.append (tanscore)
                 maxtan = max(settanlist)

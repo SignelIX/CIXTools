@@ -75,17 +75,33 @@ def Get_FragCount (m):
     frags = Chem.GetMolFrags(m)
     return len(frags)
 
-def Deprotect (compound, rxnscheme, iterate = False):
+def Deprotect (compound, rxnscheme, deprotect_name=None, iterate = False, retsmiles = False):
     deprotected = False
     Enumerator = Enumerate.Enumerate ()
     first_round = True
 
-    has_scheme = Enumerator.ReadRxnScheme(rxnscheme, 'Deprotection', False)
-    if has_scheme[0] is not None:
+    has_scheme = Enumerator.ReadRxnScheme(rxnscheme, 'Deprotection',  verbose=True)
+    schemeinfo = [[{"Reactants":["r0","None"],"Rxns":{"default":[]}}], ["r0","None"] ]
+    if deprotect_name is None:
+        for k,v in has_scheme[0][0]['Rxns'].items ():
+            if type(v) is list:
+                for l in v:
+                    schemeinfo[0][0]['Rxns']["default"].append(l)
+            else:
+                schemeinfo[0][0]['Rxns']["default"].append(v)
+    else:
+        if type (deprotect_name) is str:
+            deprotect_name = [deprotect_name]
+        for d in deprotect_name:
+            v = has_scheme[0][0]['Rxns'] [d]
+            if type(v) is list:
+                for l in v:
+                    schemeinfo[0][0]['Rxns']["default"].append(l)
+
+    if not has_scheme[0] is  None:
         last_dp = False
         while first_round or  (iterate and last_dp == True):
-            res, prod_ct = Enumerator.RunRxnScheme([compound, 'None'],rxnscheme,'Deprotection', False)
-
+            res, prod_ct, resinfo = Enumerator.RunRxnScheme([compound, 'None'], None,None, False, schemeinfo )
             if (res != 'FAIL' and res != 'None'):
                 if type(res) == str:
                     compound = Chem.MolFromSmiles(res)
@@ -117,6 +133,11 @@ def Deprotect (compound, rxnscheme, iterate = False):
 
 
     res = res_list
+    if retsmiles:
+        if deprotected:
+            return Chem.MolToSmiles(res[0])
+        else:
+            return compound
     return res, deprotected
 
 def DeprotectFile ( df, n_analyzed, idcol, smilescol,origsmilescol,deprotect_specfile, outfile):
