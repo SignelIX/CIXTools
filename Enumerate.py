@@ -22,6 +22,7 @@ import operator
 import sys
 import gc
 import os, psutil
+import math
 
 
 class Enumerate:
@@ -389,20 +390,7 @@ class Enumerate:
             df.to_csv (dp_outfile)
 
     def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = []):
-        def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
-            rxtnts = []
-            for ix in range (0, cycct):
-                rxtnts.append (row['bb' + str (ix + 1) + '_smiles'])
-            try:
-                res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
-            except:
-                print('FAIL--Error', rxtnts)
-                return 'FAIL'
-            if res == 'FAIL':
-                print('FAIL in taskfcn')
-                print(rxtnts)
 
-            return res
 
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct):
             for i, b in bdfs[level].iterrows():
@@ -481,21 +469,38 @@ class Enumerate:
             resdf = infilelist
 
         gc.collect ()
-        self.DoParallel_Enumeration (libname, rxschemefile, outpath, rndct)
+        self.DoParallel_Enumeration (resdf, libname, rxschemefile, outpath, cycct, rndct)
 
-    def DoParallel_Enumeration (self, libname, rxschemefile,outpath, rndct=-1):
+    def DoParallel_Enumeration (self, resdf, libname, rxschemefile,outpath, cycct, rndct=-1):
+        def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
+            rxtnts = []
+            for ix in range (0, cycct):
+                rxtnts.append (row['bb' + str (ix + 1) + '_smiles'])
+            try:
+                res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+            except:
+                print('FAIL--Error', rxtnts)
+                return 'FAIL'
+            if res == 'FAIL':
+                print('FAIL in taskfcn')
+                print(rxtnts)
+
+            return res
         def chunker(seq, size):
-            return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+            return (seq[pos:pos + size] for pos in range(0, len(seq), size))
         print('starting enumeration')
         NUM_WORKERS = 8
 
         chksz = 10000
-        f = open (outpath + '.' + outsuff + '.all.csv', 'w')
-        f.close ()
         df  = None
+        outsuff = 'full'
+        if rndct != -1:
+            outsuff = str(rndct)
+        f = open(outpath + '.' + outsuff + '.all.csv', 'w')
+        f.close()
 
         for i in chunker(resdf, chksz):
-            print ('Chunk ' + str (i) + ' of ' + ceil (len ( df)/chksz))
+            print ('Chunk ' + str (i) + ' of ' + math.ceil (len ( df)/chksz))
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
@@ -506,9 +511,7 @@ class Enumerate:
 
             moddf = resdf.merge(res, left_index=True, right_index=True)
             moddf = moddf.rename(columns={0: 'full_smiles'})
-            outsuff = 'full'
-            if rndct != -1:
-                outsuff = str(rndct)
+
             if outpath is not None:
                 moddf[moddf['full_smiles'] != 'FAIL'].to_csv(outpath + '.' + outsuff + '.enum.csv', index=False)
                 moddf[moddf['full_smiles'] == 'FAIL'].to_csv(outpath + '.' + outsuff + '.fail.csv', index=False)
