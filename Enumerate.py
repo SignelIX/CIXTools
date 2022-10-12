@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import re
 import operator
 import sys
+import gc
+import os, psutil
 
 
 class Enumerate:
@@ -387,7 +389,6 @@ class Enumerate:
             df.to_csv (dp_outfile)
 
     def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = []):
-    # currently hard coded to 3 cycles, needs to be improved
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
             rxtnts = []
             for ix in range (0, cycct):
@@ -403,48 +404,34 @@ class Enumerate:
 
             return res
 
-        def rec_bbpull(bdfs, level, cycct, bbslist, ct):
-            print ('RECPULL', level, cycct, len(bdfs))
+        def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct):
             for i, b in bdfs[level].iterrows():
-                print (level)
                 bb = b['BB_ID']
                 bbs = b['SMILES']
                 bbslist.append(bb)
                 bbslist.append(bbs)
                 if level < cycct - 1:
-                    ct = rec_bbpull(bdfs, level + 1, cycct, bbslist)
+                    ct, bbslist, reslist = rec_bbpull(bdfs, level + 1, cycct, bbslist, ct, reslist, fullct)
                 else:
-                    print(bbslist)
+                    reslist.append(bbslist)
                     ct += 1
                     if ct % 10000 == 0:
-                        print(ct, '/', fullct, end='\r')
-                return ct
+                        print('RECURS CT', ct, '/', fullct, end='\r')
+
+            return ct, bbslist, reslist
 
         if SMILEScolnames is None:
             SMILEScolnames = []
         if BBIDcolnames is None:
             BBIDcolnames = []
         infilelist.sort ()
-        print (infilelist)
         cycct = len (infilelist)
 
         if type(infilelist) is list:
             cycdict = {}
             ct = 1
-            for f in infilelist:
-                cycdict['BB' + str(ct)] = pd.read_csv(f)
-                changecoldict = {}
-                if 'SMILES' not in cycdict['BB' + str(ct)].columns:
-                    for smc in SMILEScolnames:
-                        if smc in cycdict['BB' + str(ct)].columns:
-                            changecoldict[smc] = 'SMILES'
-                if 'BB_ID' not in cycdict['BB' + str(ct)].columns:
-                    for bbidc in BBIDcolnames:
-                        if bbidc in cycdict['BB' + str(ct)].columns:
-                            changecoldict[bbidc] = 'BB_ID'
-                if len (changecoldict.keys ()) > 0:
-                    cycdict['BB' + str(ct)] = cycdict['BB' + str(ct)].rename (columns=changecoldict)
-                ct += 1
+
+            cycdict = self.load_BBlists(infilelist, BBIDcolnames, SMILEScolnames)
 
             bdfs = [None] * cycct
             if bblistfile is not None:
@@ -456,7 +443,6 @@ class Enumerate:
                 for ix in range(0, cycct):
                     bdfs[ix] = cycdict['BB' + str(ix+1)]
 
-            ct = 0
             fullct = 1
             for ix in range(0, cycct):
                 fullct *= len(bdfs[ix])
@@ -464,11 +450,9 @@ class Enumerate:
             print('molecules to enumerate:', rndct)
             if rndct > fullct:
                 rndct = -1
-
-            if rndct == -1:
-                reslist = [[]] * fullct
-                bbslist= []
-                rec_bbpull (bdfs, 0, cycct, bbslist, 0)
+            if int (rndct) == -1:
+                reslist= []
+                ct , bbslist, reslist = rec_bbpull (bdfs, 0, cycct, [], 0, reslist, fullct)
             else:
                 reslist = [[]] * rndct
                 ct = 0
@@ -476,8 +460,9 @@ class Enumerate:
                 while ct < rndct:
                     bblist = []
                     for ix in range (0, cycct):
-                        bbdf = cycdict['BB' + str (ix + 1)].sample()
-                        b = bbdf.iloc[0]
+                        ri = random.randint (0, len (cycdict['BB' + str (ix + 1)]))
+                        # bbdf = cycdict['BB' + str (ix + 1)].sample()
+                        b = cycdict['BB' + str (ix + 1)].iloc[ri]
                         bb = b['BB_ID']
                         bbs = b['SMILES']
                         bblist.append (bb)
@@ -495,38 +480,59 @@ class Enumerate:
         else:
             resdf = infilelist
 
+        gc.collect ()
+        self.DoParallel_Enumeration (libname, rxschemefile, outpath, rndct)
+
+    def DoParallel_Enumeration (self, libname, rxschemefile,outpath, rndct=-1):
+        def chunker(seq, size):
+            return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
         print('starting enumeration')
-        NUM_WORKERS = 16
+        NUM_WORKERS = 8
 
-        pbar = ProgressBar()
-        pbar.register()
-        ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
-        schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
-        res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
-                        meta=(0, str)).compute()
-        pbar.unregister()
+        chksz = 10000
+        f = open (outpath + '.' + outsuff + '.all.csv', 'w')
+        f.close ()
+        df  = None
 
-        df = resdf.merge(res, left_index=True, right_index=True)
-        df = df.rename(columns={0: 'full_smiles'})
-        outsuff = 'full'
-        if rndct != -1:
-            outsuff = str(rndct)
+        for i in chunker(resdf, chksz):
+            print ('Chunk ' + str (i) + ' of ' + ceil (len ( df)/chksz))
+            pbar = ProgressBar()
+            pbar.register()
+            ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
+            schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
+            res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
+                            meta=(0, str)).compute()
+            pbar.unregister()
+
+            moddf = resdf.merge(res, left_index=True, right_index=True)
+            moddf = moddf.rename(columns={0: 'full_smiles'})
+            outsuff = 'full'
+            if rndct != -1:
+                outsuff = str(rndct)
+            if outpath is not None:
+                moddf[moddf['full_smiles'] != 'FAIL'].to_csv(outpath + '.' + outsuff + '.enum.csv', index=False)
+                moddf[moddf['full_smiles'] == 'FAIL'].to_csv(outpath + '.' + outsuff + '.fail.csv', index=False)
+                moddf.to_csv(outpath + '.' + outsuff + '.all.csv', mode='a', index=False, header=False)
+            else:
+                if df is None:
+                    df = moddf
+                else:
+                    df.append(moddf, ignore_index=True)
+            gc.collect ()
+
+
         if outpath is not None:
-            df[df['full_smiles'] != 'FAIL'].to_csv(outpath + '.' + outsuff + '.enum.csv', index=False)
-            df[df['full_smiles'] == 'FAIL'].to_csv(outpath + '.' + outsuff + '.fail.csv', index=False)
-            df.to_csv(outpath + '.' + outsuff + '.all.csv', index=False)
             return outpath + '.' + outsuff + '.all.csv'
         else:
             return df
 
     def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = []):
-        print ('inpath: ', inpath,  libname)
+        print ('inpath: ', inpath,  libname,  num_strux)
         bbspecprefix = ''
         outspecprefix = ''
         if bbspec != '' and bbspec is not None:
             outspecprefix = '/' + outspec
         bbpath = inpath + libname + outspecprefix + '/BBLists'
-        print ('BBPATH', bbpath)
         flist = pathlib.Path(bbpath).glob('*.' + bbspec + '*.csv')
         infilelist = []
 
@@ -536,7 +542,6 @@ class Enumerate:
             if result is not None:
                 infilelist.append (c)
         infilelist.sort ()
-        print ('INFILELIST', infilelist)
 
         if rxschemefile is None:
             rxschemefile = inpath + 'RxnSchemes.json'
@@ -545,7 +550,6 @@ class Enumerate:
         if not os.path.exists(samplespath):
             os.makedirs(samplespath)
         outpath = inpath + foldername + '/Samples/' + libname + '.' + outspec
-        print('outpath:', outpath, SMILEScolnames, BBcolnames)
         outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames)
         return outfile
 
@@ -664,15 +668,16 @@ class Enumerate:
 
         for cyc in bbdict.keys():
             changecoldict = {}
-            for smc in SMILEScolnames:
-                if smc in bbdict[cyc].columns:
-                    changecoldict[smc] = 'SMILES'
-            for bbidc in BBIDcolnames:
-                if bbidc in bbdict[cyc].columns:
-                    changecoldict[bbidc] = 'BB_ID'
+            if SMILEScolnames is not None and len (SMILEScolnames) > 0:
+                for smc in SMILEScolnames:
+                    if smc in bbdict[cyc].columns:
+                        changecoldict[smc] = 'SMILES'
+            if BBIDcolnames is not None and len (BBIDcolnames) > 0:
+                for bbidc in BBIDcolnames:
+                    if bbidc in bbdict[cyc].columns:
+                        changecoldict[bbidc] = 'BB_ID'
             if len(changecoldict) > 0:
                 bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
-            print(bbdict[cyc].columns)
             bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first")
         return bbdict
 
@@ -718,7 +723,7 @@ class Enumerate:
 class EnumerationUI():
     enum = Enumerate()
     rootpath = ''
-    initpath = '../CIXTools.init.json'
+    initpath = '../CIxTools.init.json'
     smiles_colnames = None
     bbid_colnames = None
 
@@ -751,25 +756,19 @@ class EnumerationUI():
             result = re.search(r'\.BB[0-9]+\.',  c)
             if result is  not None:
                 bbfiles [result.group(0)[3:4]] = c
-        for k in bbfiles.keys ():
-            dfs[k] = None
-            if 'df' + str(k) not in st.session_state or do_reload:
-                if bbfiles[k] != '':
-                    dfs [k] = pd.read_csv(bbfiles[k])
-                    if 'SMILES' not in dfs [k].columns and self.smiles_colnames is not None:
-                        for cn in self.smiles_colnames:
-                            if cn in dfs [k].columns:
-                                dfs[k] = dfs[k].rename(columns={cn:'SMILES'})
-                                break
-                    if 'BB_ID' not in dfs [k].columns and self.bbid_colnames is not None:
-                        for cn in self.bbid_colnames:
-                            if cn in dfs [k].columns:
-                                dfs[k] = dfs[k].rename(columns={cn:'BB_ID'})
-                                break
-                    st.session_state['df' + str(k)] = dfs[k]
-            else:
+
+        if not do_reload:
+            for k in bbfiles.keys ():
+                if 'df' + str(k) not in st.session_state:
+                    do_reload = True
+        if do_reload:
+            dfs = self.enum.load_BBlists (bbfiles.values (), self.bbid_colnames, self.smiles_colnames)
+            for k in dfs.keys ():
+                st.session_state['df' + str(k)] = dfs[k]
+        else:
+            for k in dfs.keys():
                 dfs[k] = st.session_state['df' + str(k)]
-            print (dfs[k].columns)
+
         dflist = sorted(dfs.items())
         dflist = [x[1] for x in dflist]
         return dflist
@@ -786,7 +785,6 @@ class EnumerationUI():
             json.dump(data, jsonFile)
 
     def SetScheme (self):
-        print ('Set Scheme', st.session_state.scheme)
         with open(st.session_state.rxscheme, "r") as jsonFile:
             data = json.load(jsonFile)
             st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
@@ -856,7 +854,6 @@ class EnumerationUI():
                     schemelist.append (newname)
 
         with cont3:
-            print ('CONT3')
 
             colx1, colx2 = st.columns(2)
             with colx1:
@@ -894,7 +891,6 @@ class EnumerationUI():
                              rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
                                  , key='bb' + str (n ),
                                    index=st.session_state['bb' + str (n) + 'idx'])
-                print ('RXTNTS', rxtnts)
 
         with cont1:
             ccol1, ccol2 = st.columns(2)
@@ -924,7 +920,7 @@ class EnumerationUI():
             with col3:
 
                 expval = st.button('Export Random Selection')
-                countval = st.text_input(label='Count', key='rndcount')
+                countval = st.text_input(label='Count', key='rndcount', value = 5000 )
                 if expval:
                     try:
                         ct = int (countval)
