@@ -500,7 +500,7 @@ class Enumerate:
         f.close()
 
         for i in chunker(resdf, chksz):
-            print ('Chunk ' + str (i) + ' of ' + math.ceil (len ( df)/chksz))
+            print ('Chunk ' + str (i) + ' of ' + math.ceil (len ( resdf)/chksz))
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
