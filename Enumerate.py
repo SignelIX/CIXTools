@@ -648,7 +648,7 @@ class Enumerate:
             os.makedirs(outpath)
 
         for ln in listnames:
-            cdf = df[df[ln] == 'Y'].drop_duplicates(subset=['BB_ID'])
+            cdf = df[df[ln] == 'Y'].drop_duplicates(subset=['BB_ID']).reset_index(drop=True)
             if type(names_dict[ln]) == list:
                 for ix in range(0, len(names_dict[ln])):
                     cdf.to_csv(outpath + '/' + libname + '.' + names_dict[ln][ix] + '.csv', index=False)
@@ -681,7 +681,7 @@ class Enumerate:
                         changecoldict[bbidc] = 'BB_ID'
             if len(changecoldict) > 0:
                 bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
-            bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first")
+            bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first").reset_index(drop=True)
         return bbdict
 
     def pull_BBs(self, inpath, idcol, smilescol):
@@ -705,7 +705,7 @@ class Enumerate:
 
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile, retIntermeds = False):
         enum = Enumerate()
-        res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, True)
+        res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, False)
 
         if not retIntermeds:
             return res[0]
@@ -788,9 +788,13 @@ class EnumerationUI():
             json.dump(data, jsonFile)
 
     def SetScheme (self):
+        for k in st.session_state.keys ():
+            if k.startswith( 'bb') and k.endswith('idx'):
+                st.session_state[k] = 0
         with open(st.session_state.rxscheme, "r") as jsonFile:
             data = json.load(jsonFile)
             st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
+
 
     def SaveScheme (self):
         print ('Save Scheme', st.session_state.scheme)
@@ -835,6 +839,7 @@ class EnumerationUI():
         schemelist.sort ()
 
         dfs = self.UpdateBBDfs(bbpath, False)
+        print ('LEN DFS', len (dfs))
 
         with st.expander (label='Scheme Definition Tools'):
             cont1 = st.container ()
@@ -893,8 +898,8 @@ class EnumerationUI():
                         if rxtnts[n] == '':
                              rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
                                  , key='bb' + str (n ),
-                                   index=st.session_state['bb' + str (n) + 'idx'])
-
+                                   index=int(st.session_state['bb' + str(n) + 'idx']))
+                    print ('INDEX', st.session_state['bb' + str(n) + 'idx'])
         with cont1:
             ccol1, ccol2 = st.columns(2)
             with ccol1:
