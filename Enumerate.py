@@ -23,10 +23,14 @@ import sys
 import gc
 import os, psutil
 import math
+import csv
+import time
+import copy
 
 
 class Enumerate:
     rxndict = {}
+    chksz = 100000
     def React_Molecules (self, r1, r2, SM_rxn, showmols):
 
         if showmols == True:
@@ -393,20 +397,26 @@ class Enumerate:
 
 
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct):
+
             for i, b in bdfs[level].iterrows():
                 bb = b['BB_ID']
                 bbs = b['SMILES']
-                bbslist.append(bb)
-                bbslist.append(bbs)
+                if level == 0:
+                    bbslist = []
+
+                bblevellist = copy.deepcopy (bbslist)
+                bblevellist.append(bb)
+                bblevellist.append(bbs)
+
                 if level < cycct - 1:
-                    ct, bbslist, reslist = rec_bbpull(bdfs, level + 1, cycct, bbslist, ct, reslist, fullct)
+                    ct, reslist = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct)
                 else:
-                    reslist.append(bbslist)
+                    reslist.append(bblevellist)
                     ct += 1
                     if ct % 10000 == 0:
                         print('RECURS CT', ct, '/', fullct, end='\r')
 
-            return ct, bbslist, reslist
+            return ct,  reslist
 
         if SMILEScolnames is None:
             SMILEScolnames = []
@@ -440,7 +450,7 @@ class Enumerate:
                 rndct = -1
             if int (rndct) == -1:
                 reslist= []
-                ct , bbslist, reslist = rec_bbpull (bdfs, 0, cycct, [], 0, reslist, fullct)
+                ct ,  reslist = rec_bbpull (bdfs, 0, cycct, [], 0, reslist, fullct)
             else:
                 reslist = [[]] * rndct
                 ct = 0
@@ -464,14 +474,26 @@ class Enumerate:
             for ix in range(0, cycct):
                 hdrs.append ('bb' + str (ix + 1))
                 hdrs.append('bb' + str(ix + 1) + '_smiles')
-            resdf = pd.DataFrame(reslist, columns=hdrs)
+
+            if len (reslist) >  self.chksz:
+                with open(outpath + ".EnumList.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(hdrs, )
+                    writer.writerows(reslist)
+
+                enum_in = outpath + ".EnumList.csv"
+            else:
+                enum_in  = pd.DataFrame (reslist, columns= hdrs)
+
         else:
             resdf = infilelist
+            enum_in = resdf
+            hdrs = None
 
         gc.collect ()
-        self.DoParallel_Enumeration (resdf, libname, rxschemefile, outpath, cycct, rndct)
+        self.DoParallel_Enumeration (enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct)
 
-    def DoParallel_Enumeration (self, resdf, libname, rxschemefile,outpath, cycct, rndct=-1):
+    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1):
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
             rxtnts = []
             for ix in range (0, cycct):
@@ -486,26 +508,13 @@ class Enumerate:
                 print(rxtnts)
 
             return res
-        def chunker(seq, size):
-            return (seq[pos:pos + size] for pos in range(0, len(seq), size))
-        print('starting enumeration')
-        NUM_WORKERS = 8
-
-        chksz = 10000
-        df  = None
-        outsuff = 'full'
-        if rndct != -1:
-            outsuff = str(rndct)
-        f = open(outpath + '.' + outsuff + '.all.csv', 'w')
-        f.close()
-
-        for i in chunker(resdf, chksz):
-            print ('Chunk ' + str (i) + ' of ' + str(math.ceil (len ( resdf)/chksz)))
+        def processchunk (resdf, df):
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
-            res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
+            res = ddf.apply(taskfcn, axis=1, result_type='expand',
+                            args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
                             meta=(0, str)).compute()
             pbar.unregister()
 
@@ -516,13 +525,35 @@ class Enumerate:
                 moddf[moddf['full_smiles'] != 'FAIL'].to_csv(outpath + '.' + outsuff + '.enum.csv', index=False)
                 moddf[moddf['full_smiles'] == 'FAIL'].to_csv(outpath + '.' + outsuff + '.fail.csv', index=False)
                 moddf.to_csv(outpath + '.' + outsuff + '.all.csv', mode='a', index=False, header=False)
+                gc.collect()
+                return None
             else:
                 if df is None:
                     df = moddf
                 else:
                     df.append(moddf, ignore_index=True)
-            gc.collect ()
+                gc.collect()
+                return df
 
+        print('starting enumeration')
+        NUM_WORKERS = 16
+
+        df  = None
+        outsuff = 'full'
+        if rndct != -1:
+            outsuff = str(rndct)
+        f = open(outpath + '.' + outsuff + '.all.csv', 'w')
+        f.close()
+
+        if type (enum_in) is str:
+            reader = pd.read_csv(enum_in, chunksize=self.chksz)
+            df = None
+            for chunk in reader:
+                resdf = pd.DataFrame (chunk, columns = hdrs)
+                df = processchunk(resdf, df)
+        else:
+            df = None
+            df = processchunk(enum_in, df)
 
         if outpath is not None:
             return outpath + '.' + outsuff + '.all.csv'
@@ -552,7 +583,9 @@ class Enumerate:
         samplespath = inpath + foldername + '/Samples/'
         if not os.path.exists(samplespath):
             os.makedirs(samplespath)
-        outpath = inpath + foldername + '/Samples/' + libname + '.' + outspec
+        outpath = inpath + foldername + '/Samples/' + libname
+        if  outspec != '' and outspec is not None:
+            outpath += '.' + outspec
         outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames)
         return outfile
 
