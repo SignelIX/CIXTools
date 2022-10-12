@@ -36,10 +36,6 @@ class CIXTools_MainUI:
                     else:
                         st.session_state[bx[0]] = True
 
-        for b in btnlist:
-            if (b[0] in st.session_state):
-                    print (st.session_state[b[0]])
-
         if self.page == '':
             for b in btnlist:
                 if (b[0] in st.session_state and st.session_state[b[0]] == True):
