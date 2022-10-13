@@ -26,8 +26,8 @@ class Chem_SpaceVisualization:
                 df = pd.read_csv(l)
                 df['Color'] = clr
                 libdf = libdf.append(df.sample(frac=5000 / len(df)))
-            fsplit = files_list[i].split('/')
-            fname = fsplit [len (fplit) - 1]
+            fsplit = files_list[ix].split('/')
+            fname = fsplit [len (fsplit) - 1]
             legend_labels [fname] = clr
             print(len(libdf))
         libdf = libdf.sample(frac=1.0)
