@@ -12,7 +12,7 @@ class Chem_SpaceVisualization:
         libdf = None
         legend_labels = {}
         for ix in range(0, len(files_list)):
-            legend_labels = ''
+            legend_labels = {}
             l = files_list[ix]
             if ix  >= len(clr_list):
                 clr = 'gray'
