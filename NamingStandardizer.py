@@ -1,7 +1,7 @@
 import json
 initjsonfile = '../CIxTools.init.json'
 def Pull_ColStandardizer (colname):
-    f = open(self.initpath)
+    f = open(initjsonfile)
     initjson = json.load(f)
     f.close()
     if 'Column_Standardizer' in initjson:
