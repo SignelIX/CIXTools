@@ -70,7 +70,7 @@ class Chem_SpaceVisualization:
         df = NamingStandardizer.Standardize_Colnames(df, 'SMILES')
         if df is not None:
             df = df.sample(frac=.3)
-        self.div.Generate_UMAP(list(df['full_smiles']), None, fig_fname=out_img_file, outfname=out_csv_file,
+        self.div.Generate_UMAP(list(df['SMILES']), None, fig_fname=out_img_file, outfname=out_csv_file,
                           modeloutfile=out_pkl_file, transformcolorlist=None)
         return out_pkl_file, out_img_file, out_csv_file
 
