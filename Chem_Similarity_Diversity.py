@@ -20,6 +20,7 @@ from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
 import operator
 import MolDisplay as md
+import math
 
 
 class Diversity:
@@ -373,12 +374,13 @@ class Diversity:
         fplist = []
         deletedfps = []
         ct =0
+        cmpdlist = [None if type (x) ==float and math.isnan(x) else x for x in cmpdlist]
         for smi in tqdm(cmpdlist, total=len(cmpdlist), disable=hidetqdm):
 
-            if smi != 'FAIL' and smi != 'ENUMERATION_FAIL':
+            if not smi is None and smi != 'FAIL' and smi != 'ENUMERATION_FAIL':
                 if type(smi) != str:
                     mol =None
-                    print('FAIL: smiles not in correct format', smi)
+                    print('FAIL: smiles not in correct format: ', smi)
                     return None,None
                 mol = Chem.MolFromSmiles(smi)
                 try:
@@ -394,8 +396,6 @@ class Diversity:
             if fp is not None:
                 fplist.append(fp)
             ct += 1
-        print ('vstack projected len')
-        print (len(fplist))
         return np.vstack(fplist), deletedfps
 
     def Get_FPArray_dask(self, inlist, rettype = 'vstack', NUM_WORKERS=16, showprog = True, hidetqdm=False, verbose = True):
@@ -478,6 +478,7 @@ class Diversity:
         fitdata, deletefps = self.Get_FPArrayAsVstack(all_cmpds_list)
         if fitdata is None:
             return
+        deletefps = sorted (deletefps, reverse=True)
         if len (deletefps) > 0:
             for d in  deletefps:
                 colorlist.pop (d)
