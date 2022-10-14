@@ -1,11 +1,12 @@
 import json
 initjsonfile = '../CIxTools.init.json'
 def Pull_ColStandardizer (colname):
-    with open(initjsonfile, 'r'):
-        initjson = json.load (initjsonfile)
-        if 'Column_Standardizer' in initjson:
-            if colname in initjson ['Column_Standardizer']:
-                return initjson ['Column_Standardizer'][colname]
+    f = open(self.initpath)
+    initjson = json.load(f)
+    f.close()
+    if 'Column_Standardizer' in initjson:
+        if colname in initjson ['Column_Standardizer']:
+            return initjson ['Column_Standardizer'][colname]
 
 
 def Standardize_Colnames ( df, colname):
