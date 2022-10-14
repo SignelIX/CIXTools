@@ -67,6 +67,7 @@ class Chem_SpaceVisualization:
                 df = pd.read_csv(infile, sep=',')
             else:
                 df = df.append ( pd.read_csv(infile, sep=','))
+        df = NamingStandardizer.Standardize_Colnames(df, 'SMILES')
         if df is not None:
             df = df.sample(frac=.3)
         self.div.Generate_UMAP(list(df['full_smiles']), None, fig_fname=out_img_file, outfname=out_csv_file,

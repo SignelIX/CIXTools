@@ -378,7 +378,7 @@ class Diversity:
             if smi != 'FAIL' and smi != 'ENUMERATION_FAIL':
                 if type(smi) != str:
                     mol =None
-                    print('FAIL: smiles not in correct format')
+                    print('FAIL: smiles not in correct format', smi)
                     return None,None
                 mol = Chem.MolFromSmiles(smi)
                 try:
