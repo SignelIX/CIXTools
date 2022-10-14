@@ -4,16 +4,16 @@ import rdkit.Chem.rdMolDescriptors as rdMolDescriptors
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 import streamlit as st
+import json
 
-class CalcProps:
-    def addPropsToFile (self, infile, outfile,  smiles_col = 'SMILES', bbidcols = ['bb1', 'bb2','bb3']):
+class Chem_CalcProps:
+    def addPropsToFile (self, infile, outfilename,  smiles_col = 'SMILES', bbidcols = ['bb1', 'bb2','bb3']):
         def taskfcn(row):
-
             rowvals = []
             if row [smiles_col] == 'FAIL':
-                for b in bbcols:
+                for b in bbidcols:
                     rowvals.append (row [b])
-                for b in bbcols:
+                for b in bbidcols:
                     rowvals.append ( row[b + '_smiles'])
                 rowvals.append (row['full_smiles']),
                 rowvals.append ([None, None, None, None, None, None, None, None, None, None])
@@ -42,7 +42,7 @@ class CalcProps:
         meta_dict = {0:'SlogP', 1:'TPSA', 2:'AMW', 3:'RBs', 4:'CSMILES', 5:'HBD', 6:'HBA', 7:'HAC', 8:'SP3', 9:'ExactMW'}
         res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(), meta=meta_dict).compute()
         res.columns = ['SlogP', 'TPSA', 'AMW', 'RBs', 'CSMILES', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW']
-        df = resdf.merge(res, left_index=True, right_index=True)
+        df = df.merge(res, left_index=True, right_index=True)
         df.to_csv(outfilename, index=False)
         pbar.unregister()
 
@@ -85,14 +85,22 @@ class CalcProps:
                 df.loc[ix, 'CSMILES'] = CSMILES
         df.to_csv (outfile)
 
-props = CalcProps ()
-class CalcPropsUI:
-    rootpath = ''
+props = Chem_CalcProps ()
+
+class Chem_CalcPropsUI:
     initpath = '../CIxTools.init.json'
-    bbdf = None
+    paramslist = ['props_smilescol', 'props_bbidcols', 'props_infile']
 
     def __init__(self):
-        return
+        f = open(self.initpath)
+        initjson = json.load(f)
+        f.close()
+        for p in self.paramslist:
+            if p not in st.session_state or st.session_state[p] == None or st.session_state[p] == '':
+                if p in initjson:
+                    st.session_state[p] = initjson[p]
+                else:
+                    st.session_state[p] = ''
 
     def head(self):
         st.markdown("""
@@ -105,8 +113,8 @@ class CalcPropsUI:
 
     def body (self):
         filename = st.text_input (label = 'Props Input File', key = 'props_infile',  on_change=self.SaveToInit)
-        smiles_col = st.text_input(label='SMILES Column', key='props_smilescol', value='full_smiles',  on_change=self.SaveToInit)
-        bbidcols = st.text_input(label='BBID Cols', key='props_bbidcols', value='bb1,bb2,bb3',  on_change=self.SaveToInit).split(',')
+        smiles_col = st.text_input(label='SMILES Column', key='props_smilescol',  on_change=self.SaveToInit)
+        bbidcols = st.text_input(label='BBID Cols', key='props_bbidcols',  on_change=self.SaveToInit).split(',')
         RunClusters = st.button(label='Run', key='RunProps')
         if RunClusters == True:
             outfile = filename.replace ('.csv', '.props.csv')
@@ -117,16 +125,15 @@ class CalcPropsUI:
         return
 
     def SaveToInit(self):
+        print ('SAVING PROPS')
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
-        if 'props_infile' in st.session_state:
-            data["propsinfile"] = st.session_state.propsinfile
-        if 'props_smilescol' in st.session_state:
-            data["props_smilescol"] = st.session_state.schemepath
-        if 'props_bbidcols' in st.session_state:
-            data["props_bbidcols"] = st.session_state.props_bbidcols
+        for p in self.paramslist:
+            if p in st.session_state:
+                data[p] = st.session_state[p]
         with open(self.initpath, "w") as jsonFile:
-            json.dump(data, jsonFile)
+            print (json.dumps(data, indent=4))
+            jsonFile.write(json.dumps(data, indent=4))
 
     def RunUI (self):
         self.head ()

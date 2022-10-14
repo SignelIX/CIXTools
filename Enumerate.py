@@ -809,6 +809,22 @@ class EnumerationUI():
         dflist = [x[1] for x in dflist]
         return dflist
 
+    def SaveScheme (self):
+        with open(st.session_state.rxscheme, "r") as jsonFile:
+            data = json.load(jsonFile)
+        schemejson = json.loads (st.session_state.schemedef)
+        data[st.session_state.scheme] = schemejson
+        with open(st.session_state.rxscheme, "w") as jsonFile:
+            json.dump(data, jsonFile, indent=4)
+
+    def SetScheme (self):
+        for k in st.session_state.keys ():
+            if k.startswith( 'bb') and k.endswith('idx'):
+                st.session_state[k] = 0
+        with open(st.session_state.rxscheme, "r") as jsonFile:
+            data = json.load(jsonFile)
+            st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
+
     def SaveToInit(self):
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
@@ -819,25 +835,6 @@ class EnumerationUI():
             data["lastschemepath"] = st.session_state.schemepath
         with open(self.initpath, "w") as jsonFile:
             json.dump(data, jsonFile)
-
-    def SetScheme (self):
-        for k in st.session_state.keys ():
-            if k.startswith( 'bb') and k.endswith('idx'):
-                st.session_state[k] = 0
-        with open(st.session_state.rxscheme, "r") as jsonFile:
-            data = json.load(jsonFile)
-            st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
-
-
-    def SaveScheme (self):
-        print ('Save Scheme', st.session_state.scheme)
-        with open(st.session_state.rxscheme, "r") as jsonFile:
-            data = json.load(jsonFile)
-        schemejson = json.loads (st.session_state.schemedef)
-        data[st.session_state.scheme] = schemejson
-        print (data[st.session_state.scheme])
-        with open(st.session_state.rxscheme, "w") as jsonFile:
-            json.dump(data, jsonFile, indent=4)
 
     def body(self):
         smilescol='SMILES'
@@ -999,6 +996,7 @@ class EnumerationUI():
     def RunUI(self):
         self.head()
         self.body()
+
 
 
 if __name__=="__main__":

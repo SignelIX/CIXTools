@@ -1,9 +1,23 @@
 import Chem_Similarity_Diversity
 import pandas as pd
 import streamlit as st
+import json
 
 class Chem_SpaceVisualization:
+    initpath = '../CIxTools.init.json'
     div = Chem_Similarity_Diversity.Diversity()
+    paramslist = ['chemspace_outpath', 'chemspace_outprefix', 'chemspace_infilelist', 'chemspace_pklfile']
+
+    def __init__ (self):
+        f = open(self.initpath)
+        initjson = json.load(f)
+        f.close()
+        for p in self.paramslist:
+            if p not in st.session_state or st.session_state[p] == None or st.session_state [p] == '' :
+                if p in initjson:
+                    st.session_state[p] = initjson [p]
+                else:
+                    st.session_state[p] = ''
 
     def ChemicalSpace_UMap(self, outpath, outprefix, files_list, clr_list, in_pkl_file ):
         fig_file = outpath + outprefix + '.png'
@@ -60,10 +74,11 @@ class Chem_SpaceVisualization:
     def streamlit (self):
         st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
             Umap Chemspace Visualization</h1>""", unsafe_allow_html=True)
-        outpath = st.text_input (label ='outpath', key='outpath')
-        outprefix = st.text_input (label='outprefix', key='outprefix')
-        infilelist = st.text_area (label='infilelist', key='infilelist').split (',')
-        pkfile = st.text_input(label='pklfile', key='pklfile')
+
+        outpath = st.text_input (label ='chemspace_outpath', key='chemspace_outpath', on_change=self.SaveToInit)
+        outprefix = st.text_input (label='chemspace_outprefix', key='chemspace_outprefix',on_change=self.SaveToInit)
+        infilelist = st.text_area (label='chemspace_infilelist', key='chemspace_infilelist', on_change=self.SaveToInit).split (',')
+        pkfile = st.text_input(label='chemspace_pklfile', key='chemspace_pklfile', on_change=self.SaveToInit )
         if st.button(label='run umap generation', key='RunUMAP'):
             pklfile, imgfile, csvfile  = self.Generate_UMap (outpath, outprefix, infilelist)
             st.text (pklfile)
@@ -74,6 +89,17 @@ class Chem_SpaceVisualization:
                                                    pkfile)
                 st.image(fig_file)
             st.success('Done!')
+
+    def SaveToInit(self):
+
+        with open(self.initpath, "r") as jsonFile:
+            data = json.load(jsonFile)
+        for p in self.paramslist:
+            if p in st.session_state:
+                data[p] = st.session_state[p]
+        with open(self.initpath, "w") as jsonFile:
+            print (json.dumps(data, indent=4))
+            jsonFile.write(json.dumps(data, indent=4))
 
     def RunUI (self):
         self.streamlit ()

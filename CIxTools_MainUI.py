@@ -4,7 +4,7 @@ from rdkit.Chem import Draw
 from PIL import Image
 import Enumerate
 import Chem_SpaceVisualization
-import CalcProps
+import Chem_CalcProps
 import streamlit.components.v1 as components
 
 class CIXTools_MainUI:
@@ -25,7 +25,7 @@ class CIXTools_MainUI:
         btnlist = [
             ('ENUM', 'Enumeration', Enumerate.EnumerationUI),
             ('CHEMSPACE', 'Display Chemical Space', Chem_SpaceVisualization.Chem_SpaceVisualization),
-            ('ADD_PROPS', 'Add Chem Properties', CalcProps.CalcPropsUI)
+            ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps.Chem_CalcPropsUI)
         ]
         for b in btnlist:
             btn  = st.sidebar.button(b[1])
@@ -41,7 +41,6 @@ class CIXTools_MainUI:
         if self.page == '':
             for b in btnlist:
                 if (b[0] in st.session_state and st.session_state[b[0]] == True):
-                    print (b[0], st.session_state[b[0]])
                     self.page = b[0]
                     pg  = b[2]
                     st.session_state[b[0]] = True
