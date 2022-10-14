@@ -2,6 +2,7 @@ import Chem_Similarity_Diversity
 import pandas as pd
 import streamlit as st
 import json
+import NamingStandardizer
 
 class Chem_SpaceVisualization:
     initpath = '../CIxTools.init.json'
@@ -43,11 +44,12 @@ class Chem_SpaceVisualization:
             fsplit = files_list[ix].split('/')
             fname = fsplit [len (fsplit) - 1]
             legend_labels [fname] = clr
-            print(len(libdf))
-        libdf = libdf.sample(frac=1.0)
-        print(len(libdf))
 
-        smileslist = list(libdf['full_smiles'])
+        libdf = NamingStandardizer.Standardize_Colnames(libdf, 'SMILES' )
+
+        libdf = libdf.sample(frac=1.0)
+
+        smileslist = list(libdf['SMILES'])
         colorlist = list(libdf['Color'])
         print('generating umap/coordinates')
 

@@ -125,7 +125,6 @@ class Chem_CalcPropsUI:
         return
 
     def SaveToInit(self):
-        print ('SAVING PROPS')
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
         for p in self.paramslist:
