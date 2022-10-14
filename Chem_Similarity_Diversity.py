@@ -379,7 +379,7 @@ class Diversity:
                 if type(smi) != str:
                     mol =None
                     print('FAIL: smiles not in correct format')
-                    exit ()
+                    return None,None
                 mol = Chem.MolFromSmiles(smi)
                 try:
                     fp = Chem.GetMorganFingerprintAsBitVect(mol, radius = 2, nBits = 1024, useFeatures = False)
@@ -501,7 +501,7 @@ class Diversity:
 
         if (len(all_cmpds_list) != len(u)):
             print('array mismatch')
-            exit()
+            return
 
         if outfname is not None:
             for i in range (0, len (all_cmpds_list)):
