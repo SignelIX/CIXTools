@@ -30,16 +30,16 @@ class Chem_CalcProps:
                 ExactMW = rdMolDescriptors.CalcExactMolWt(mol)
                 CSMILES = Chem.CanonSmiles(row[smiles_col])
 
-            res = [ round(SlogP, 2), round(TPSA, 2), AMW, RBs, CSMILES, HBD, HBA, HAC, round(SP3, 2), round(ExactMW, 2)]
+            res = [ round(SlogP, 2), round(TPSA, 2), round (AMW,2), RBs, CSMILES, HBD, HBA, HAC, round(SP3, 2), round(ExactMW, 2)]
 
             return res
 
-        df = pd.read_csv(infile).head () #DEBUG
+        df = pd.read_csv(infile)
         NUM_WORKERS = 16
         ddf = dd.from_pandas(df, npartitions=NUM_WORKERS)
         pbar = ProgressBar()
         pbar.register()
-        meta_dict = {0:'SlogP', 1:'TPSA', 2:'AMW', 3:'RBs', 4:'CSMILES', 5:'HBD', 6:'HBA', 7:'HAC', 8:'SP3', 9:'ExactMW'}
+        meta_dict = {0:float, 1:float, 2:float, 3:int, 4:str, 5:int, 6:int, 7:int, 8:float, 9:float}
         res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(), meta=meta_dict).compute()
         res.columns = ['SlogP', 'TPSA', 'AMW', 'RBs', 'CSMILES', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW']
         df = df.merge(res, left_index=True, right_index=True)
