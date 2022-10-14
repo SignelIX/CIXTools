@@ -20,7 +20,7 @@ class Chem_SpaceVisualization:
                 else:
                     st.session_state[p] = ''
 
-    def ChemicalSpace_UMap(self, outpath, outprefix, files_list, clr_list, in_pkl_file ):
+    def ChemicalSpace_UMap(self, outpath, outprefix, files_list, clr_list, in_pkl_file, numpts ):
         fig_file = outpath + outprefix + '.png'
         out_file = outpath + outprefix + '.csv'
 
@@ -36,11 +36,11 @@ class Chem_SpaceVisualization:
             if libdf is None:
                 libdf = pd.read_csv(l)
                 libdf['Color'] = clr
-                libdf = libdf.sample(frac=5000 / len(libdf))
+                libdf = libdf.sample(frac=min(1, numpts / len(libdf)))
             else:
                 df = pd.read_csv(l)
                 df['Color'] = clr
-                libdf = libdf.append(df.sample(frac=5000 / len(df)))
+                libdf = libdf.append(df.sample(min(1,frac=numpts / len(df))))
             fsplit = files_list[ix].split('/')
             fname = fsplit [len (fsplit) - 1]
             legend_labels [fname] = clr
@@ -89,7 +89,7 @@ class Chem_SpaceVisualization:
         if st.button(label='run umap vs model', key='RunUMAPvModel'):
             with st.spinner('Building Map...'):
                 fig_file = self.ChemicalSpace_UMap(outpath, outprefix, infilelist, ['red', 'blue', 'aqua', 'purple'],
-                                                   pkfile)
+                                                   pkfile, 5000)
                 st.image(fig_file)
             st.success('Done!')
 
