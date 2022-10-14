@@ -476,6 +476,8 @@ class Diversity:
             all_cmpds_list.extend(transform_cmpdlist)
 
         fitdata, deletefps = self.Get_FPArrayAsVstack(all_cmpds_list)
+        if fitdata is None:
+            return
         if len (deletefps) > 0:
             for d in  deletefps:
                 colorlist.pop (d)
