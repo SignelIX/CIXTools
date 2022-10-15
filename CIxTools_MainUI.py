@@ -1,11 +1,8 @@
 import streamlit as st
-from rdkit import Chem
-from rdkit.Chem import Draw
-from PIL import Image
 import Enumerate
-import Chem_SpaceVisualization
+import Chem_SpaceVisualization as ChSV
 import Chem_CalcProps
-import streamlit.components.v1 as components
+
 
 class CIXTools_MainUI:
     page = 'HOME'
@@ -24,7 +21,7 @@ class CIXTools_MainUI:
         pg = None
         btnlist = [
             ('ENUM', 'Enumeration', Enumerate.EnumerationUI),
-            ('CHEMSPACE', 'Display Chemical Space', Chem_SpaceVisualization.Chem_SpaceVisualization),
+            ('CHEMSPACE', 'Display Chemical Space', ChSV.CSV_UI),
             ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps.Chem_CalcPropsUI)
         ]
         for b in btnlist:

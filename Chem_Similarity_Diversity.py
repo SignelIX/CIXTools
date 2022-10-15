@@ -5,21 +5,15 @@ import rdkit.DataStructs as DataStructs
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import umap
 import ChemUtilities
 import random
 from tqdm import tqdm
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
-import pickle
-import Enumeration_CombinatorialLibrary as cle
 import Enumerate
 from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
 import operator
-import MolDisplay as md
 import math
 
 
@@ -439,162 +433,6 @@ class Diversity:
         print ('fps complete')
         return fplist, deletedfps
 
-    def GenUMAP(self, fitdata, ncomp, modeloutfile=None):
-        print('generating umap...')
-        fit = umap.UMAP(metric="jaccard",
-                        n_components=ncomp,
-                        n_neighbors=25,
-                        low_memory=False,
-                        min_dist=0.001,
-                        verbose=True)
-        u = fit.fit_transform(fitdata)
-        print('writing umap to pkl')
-        if modeloutfile is not None:
-            pickle.dump(fit, open(modeloutfile, 'wb'))
-        return u
-
-    def Generate_UMAP (self, fit_cmpdlist, transform_cmpdlist, fig_fname, outfname, modelfile = None,
-                       transformcolorlist = None, modeloutfile=None, legendlabels = None ):
-        if outfname is not None:
-            outf = open(outfname, 'w')
-            outf.write ('SMILES,x,y,color\n')
-
-        if fit_cmpdlist is None:
-            colorlist = []
-        else:
-            colorlist = ['blue']*(len(fit_cmpdlist))
-        if transform_cmpdlist is not None:
-            if transformcolorlist is not None:
-                colorlist.extend(transformcolorlist)
-            else:
-                colorlist.extend(['red'] * len(transform_cmpdlist))
-
-        all_cmpds_list = []
-        if fit_cmpdlist is not None:
-            all_cmpds_list.extend (fit_cmpdlist)
-        if transform_cmpdlist is not None:
-            all_cmpds_list.extend(transform_cmpdlist)
-
-        fitdata, deletefps = self.Get_FPArrayAsVstack(all_cmpds_list)
-        if fitdata is None:
-            return
-        deletefps = sorted (deletefps, reverse=True)
-        if len (deletefps) > 0:
-            for d in  deletefps:
-                colorlist.pop (d)
-                all_cmpds_list.pop (d)
-        sns.set(style='white', context='poster', rc={'figure.figsize': (14, 10)})
-
-        print ('modelfile', modelfile)
-        if modelfile is None:
-            print ('calculating UMAP')
-            fit= umap.UMAP(metric = "jaccard",
-                          n_neighbors = 25,
-                          n_components = 2,
-                          low_memory = False,
-                          min_dist = 0.001,
-                          verbose = True)
-            u = fit.fit_transform(fitdata)
-
-        else:
-            f = open (modelfile, 'rb')
-            fit = pickle.load (f)
-            f.close ()
-            u = fit.transform(fitdata)
-
-        if (len(all_cmpds_list) != len(u)):
-            print('array mismatch')
-            return
-
-        if outfname is not None:
-            for i in range (0, len (all_cmpds_list)):
-                if transformcolorlist is None:
-                    outf.write (','.join (str (a) for a in [all_cmpds_list[i], u[i,0], u[i,1], '\n']))
-                else:
-                    outf.write(','.join(str(a) for a in [all_cmpds_list[i], u[i, 0], u[i, 1], colorlist [i], '\n']))
-            outf.close ()
-
-        plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=4, alpha=.2)
-        if transform_cmpdlist is not None:
-            len_transform = str(len(transform_cmpdlist))
-        else:
-            len_transform = 'N/A'
-        plt.title('UMAP embedding of Diverse Set: fit points:' +  str(len(fitdata)) + ' diversity points:' +  len_transform )
-        patches = []
-        # if legenddict is not None:
-        #     for cx in legenddict.keys():
-        #         patches.append (mpatches.Patch(color=legendlabels[cx], label=cx))
-        #     plt.legend(loc='upper right', handles = patches)
-
-        plt.savefig(fig_fname)
-
-        # plt.xlim ([-12,26])
-        # plt.ylim ([-11,23])
-        plt.show ()
-
-        if modeloutfile is not None:
-            print('writing model')
-            pickle.dump(fit, open(modeloutfile, 'wb'))
-            f = open(modeloutfile.replace('.pkl', '.csv'), 'w')
-            for ux in u:
-                f.write(str(ux[0]) + ',' + str(ux[1]) + '\n')
-            f.close()
-
-    def Generate_UMAP_From_File (self, fullfile, cmpdfile, outfile, smilescol, colorcol, umap_outfile, numpts = -1):
-        infile = open(fullfile)
-        dffull = pd.read_csv(infile)
-        infile.close()
-
-        infile = open(cmpdfile)
-        dfset = pd.read_csv(infile)
-        infile.close()
-
-        if numpts == -1:
-            fulllist = dffull[smilescol].tolist()
-            cmpdlist = dfset[smilescol].tolist()
-            colorlist = dfset[colorcol].tolist()
-        else:
-            fulllist = dffull[smilescol].tolist()[0:numpts]
-            cmpdlist = dfset[smilescol].tolist()[0:numpts]
-            colorlist = dfset[colorcol].tolist()[0:numpts]
-
-
-        self.Generate_UMAP(fulllist, cmpdlist, outfile, umap_outfile, colorlist  )
-
-    def Generate_UmapEmbedding(self, libname, bbdict, ncomp,
-                               rxnschemefile, modeloutfile, umap_maxptct):
-        cycs = list(bbdict.keys())
-
-        print('building umap')
-        umapsetdict = {}
-        umapstruclist = []
-
-        for cyc in bbdict.keys():
-            bbdict[cyc] = bbdict[cyc].sample(frac=1.0)
-            umapsetdict[cyc] = []
-            for i in range(0, min(umap_maxptct, len(bbdict[cyc]))):
-                umapsetdict[cyc].append(i)
-
-        tuples = cle.recurs_tuples(umapsetdict, None, cycs, cycs[0])
-        tupleinfodict = {}
-
-        umapstruclist = cle.EnumTuples_dask(rxnschemefile, libname, tuples, bbdict, cycs, tupleinfodict)
-        struclist = []
-        for ux in umapstruclist:
-            struclist.append(ux[0])
-        fplist = self.generatefps_dask(struclist, True, bitvec=True)
-        fitdata = np.vstack(fplist)
-        u = self.GenUMAP(fitdata, ncomp, modeloutfile)
-
-        colorlist = ['b'] * len(u)
-        plt.scatter(u[:, 0], u[:, 1], s=9, c=colorlist, label='test', edgecolors='k', linewidths=0.2)
-        plt.show()
-        if modeloutfile is not None:
-            print('writing umap data')
-            f = open(modeloutfile.replace('.pkl', '.csv'), 'w')
-            for ix in range(0, len(u)):
-                f.write(umapstruclist[ix][0] + ',' + str(u[ix][0]) + ',' + str(u[ix][1]) + '\n')
-            f.close()
 
     def DiSE_Selection (self, infile, outfile, rankcol, simcutoff, scaffold_sim_cutoff, n_chosen, minrankscore, maxviolations, hardsimcutoff, maxbbusage):
         df = pd.read_csv(infile)
@@ -689,6 +527,7 @@ class Diversity:
         if showprog:
             pbar = ProgressBar()
             pbar.register()
+
         res = ddf.apply(fptaskfcn, args=([bitvec]), meta=(0, object)).compute()
 
         if showprog:
