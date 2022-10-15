@@ -279,7 +279,8 @@ class Chem_SpaceVisualizationUI:
             pklfile, imgfile, csvfile, plotlyfig  = self.ChSV.CreateMultiFile_UMap (outpath, outprefix, infilelist, None)
             st.text (pklfile)
             st.image (imgfile)
-            st.plotly_chart(plotlyfig)
+            if plotlyfig is not None:
+                st.plotly_chart(plotlyfig)
 
         if st.button(label='run umap vs model', key='RunUMAPvModel'):
             with st.spinner('Building Map...'):
