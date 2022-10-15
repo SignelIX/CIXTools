@@ -154,7 +154,7 @@ class Chem_SpaceVisualization:
                 um_pts.append ([uix[0],uix[1]])
 
         u = np.append( np.array(um_pts), u,0)
-        plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=4, alpha=.2,  edgecolors='k', linewidths=0.2)
+        plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=4, alpha= 1.0,  edgecolors='k', linewidths=0.2)
         #pltlyfig = px.scatter(x= u[:, 0], y =u[:, 1], color=colorlist, )
         pltlyfig = None
 
