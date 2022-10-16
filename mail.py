@@ -1,7 +1,7 @@
 import smtplib
 from email.message import EmailMessage
 def send_mail(to_email, subject, message, server='mail.signelix.com',
-              from_email='<>'):
+              from_email='eric@signelix.com'):
 
     msg = EmailMessage()
     msg['Subject'] = subject
@@ -11,7 +11,7 @@ def send_mail(to_email, subject, message, server='mail.signelix.com',
     server = smtplib.SMTP(server, 26)
     server.set_debuglevel(1)
     pswd = input ('password')
-    server.login('<>', pswd)  # user & password
+    server.login('eric@signelix.com', pswd)  # user & password
     server.send_message(msg)
     server.quit()
     print('successfully sent the mail.')

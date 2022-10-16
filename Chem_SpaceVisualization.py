@@ -25,6 +25,7 @@ class Chem_SpaceVisualization:
         legend_labels = {}
         if clr_list is None:
             clr_list = self.clrs
+
         for ix in range(0, len(files_list)):
             l = files_list[ix]
             if ix  >= len(clr_list):
@@ -46,6 +47,7 @@ class Chem_SpaceVisualization:
             fsplit = files_list[ix].split('/')
             fname = fsplit [len (fsplit) - 1]
             legend_labels [fname] = clr
+
         if underlying_mapfile is not None:
             legend_labels[pathlib.Path(underlying_mapfile).name ] = 'gray'
         libdf = NamingStandardizer.Standardize_Colnames(libdf, 'SMILES' )
@@ -60,7 +62,7 @@ class Chem_SpaceVisualization:
                           transformcolorlist=colorlist, legendlabels=legend_labels, underlyingmaplist= umdf.values.tolist())
         return fig_file, pltlyfig
 
-    def CreateMultiFile_UMap (self, outpath, outprefix, infilelist):
+    def CreateMultiFile_UMap (self, outpath, outprefix, infilelist, frac):
         out_img_file = outpath + outprefix + '.png'
         out_pkl_file = outpath + outprefix + '.pkl'
         out_csv_file = outpath + outprefix + '.csv'
@@ -78,7 +80,7 @@ class Chem_SpaceVisualization:
 
         df = NamingStandardizer.Standardize_Colnames(df, 'SMILES')
         if df is not None:
-            df = df.sample(frac=.3)
+            df = df.sample(frac=frac)
         plotlyfig = self.Generate_UMAP(list(df['SMILES']), None, fig_fname=out_img_file, outfname=out_csv_file,
                           modeloutfile=out_pkl_file, transformcolorlist=None, legendlabels=legendlabels)
         return out_pkl_file, out_img_file, out_csv_file, plotlyfig
@@ -90,16 +92,31 @@ class Chem_SpaceVisualization:
             outf.write ('SMILES,x,y,color\n')
 
         colorlist = []
+        alphalist = []
+        sizelist = []
         if fit_cmpdlist is not None:
-            colorlist = ['blue']*(len(fit_cmpdlist))
+            colorlist = ['gray']*(len(fit_cmpdlist))
+            alphalist = [1.0]  *(len(fit_cmpdlist))
+            sizelist = [4.0]*(len(fit_cmpdlist))
         if underlyingmaplist is not None:
             colorlist.extend(['gray'] * len(underlyingmaplist))
+            alphalist = [1.0] * (len(underlyingmaplist))
+            sizelist = [4.0] * (len(underlyingmaplist))
 
         if transform_cmpdlist is not None:
             if transformcolorlist is not None:
                 colorlist.extend(transformcolorlist)
+                for cx in transformcolorlist:
+                    if cx == 'red':
+                        alphalist.append (.2)
+                        sizelist.append (4.0)
+                    else:
+                        alphalist.append(.7)
+                        sizelist.append(8.0)
             else:
                 colorlist.extend(['red'] * len(transform_cmpdlist))
+                alphalist.extend([.2] * len(transform_cmpdlist))
+                sizelist.extend([4.0] *len(transform_cmpdlist))
 
         all_cmpds_list = []
         if fit_cmpdlist is not None:
@@ -116,6 +133,8 @@ class Chem_SpaceVisualization:
             for d in  deletefps:
                 colorlist.pop (d)
                 all_cmpds_list.pop (d)
+                alphalist.pop (d)
+                sizelist.pop(d)
         sns.set(style='white', context='poster', rc={'figure.figsize': (14, 10)})
 
         print ('modelfile', modelfile)
@@ -153,8 +172,16 @@ class Chem_SpaceVisualization:
             for uix in underlyingmaplist:
                 um_pts.append ([uix[0],uix[1]])
 
-        u = np.append( np.array(um_pts), u,0)
-        plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=4, alpha= 1.0,  edgecolors='k', linewidths=0.2)
+        if u is None:
+            u = np.array(um_pts)
+        else:
+            u = np.append( np.array(um_pts), u,0)
+
+        plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=sizelist, alpha= alphalist,  edgecolors='k', linewidths=0.2)
+
+        nbins = 100
+        # plt.hexbin(u[:, 0], u[:, 1], gridsize=nbins, cmap=plt.cm.BuGn_r, alpha=1.0)
+        # plt.scatter(u[:, 0], u[:, 1], color='r', marker='o', s=4, alpha=1.0, edgecolors='k', linewidths=0.2)
         #pltlyfig = px.scatter(x= u[:, 0], y =u[:, 1], color=colorlist, )
         pltlyfig = None
 
@@ -252,7 +279,7 @@ class Chem_SpaceVisualization:
 class Chem_SpaceVisualizationUI:
     initpath = '../CIxTools.init.json'
     paramslist = ['chemspace_outpath', 'chemspace_strucct', 'chemspace_outprefix', 'chemspace_infilelist',
-                  'chemspace_pklfile']
+                  'chemspace_pklfile', 'chemspace_geninfilelist', 'chemspace_genoutpath',  'chemspace_genoutprefix',  'chemspace_genfrac']
     ChSV = Chem_SpaceVisualization ()
     def __init__ (self):
         f = open(self.initpath)
@@ -268,19 +295,27 @@ class Chem_SpaceVisualizationUI:
         st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
             Umap Chemspace Visualization</h1>""", unsafe_allow_html=True)
 
+        with st.expander(label='Generate Map Model'):
+            gen_infilelist = st.text_area(label='chemspace_geninfilelist', key='chemspace_geninfilelist', on_change=self.SaveToInit).strip().split('\n')
+            gen_outpath = st.text_input(label='chemspace_genoutpath', key='chemspace_genoutpath', on_change=self.SaveToInit)
+            gen_outprefix = st.text_input(label='chemspace_genoutprefix', key='chemspace_genoutprefix', on_change=self.SaveToInit)
+            gen_frac = st.text_input(label='chemspace_genfrac', key='chemspace_genfrac', on_change=self.SaveToInit)
+            if st.button(label='run umap generation', key='RunUMAP'):
+                pklfile, imgfile, csvfile, plotlyfig = self.ChSV.CreateMultiFile_UMap(gen_outpath, gen_outprefix, gen_infilelist,None, frac= gen_frac)
+                st.text(pklfile)
+                st.image(imgfile)
+                if plotlyfig is not None:
+                    st.plotly_chart(plotlyfig)
+
         outpath = st.text_input (label ='chemspace_outpath', key='chemspace_outpath', on_change=self.SaveToInit)
         outprefix = st.text_input (label='chemspace_outprefix', key='chemspace_outprefix',on_change=self.SaveToInit)
         strucct = st.text_input(label='chemspace_strucct', key='chemspace_strucct',  on_change=self.SaveToInit)
         infilelist = st.text_area (label='chemspace_infilelist', key='chemspace_infilelist', on_change=self.SaveToInit).strip ().split ('\n')
         pkfile = st.text_input(label='chemspace_pklfile', key='chemspace_pklfile', on_change=self.SaveToInit )
+
         underlying_mapfile = pkfile.replace ('.pkl', '.csv')
 
-        if st.button(label='run umap generation', key='RunUMAP'):
-            pklfile, imgfile, csvfile, plotlyfig  = self.ChSV.CreateMultiFile_UMap (outpath, outprefix, infilelist, None)
-            st.text (pklfile)
-            st.image (imgfile)
-            if plotlyfig is not None:
-                st.plotly_chart(plotlyfig)
+
 
         if st.button(label='run umap vs model', key='RunUMAPvModel'):
             with st.spinner('Building Map...'):
