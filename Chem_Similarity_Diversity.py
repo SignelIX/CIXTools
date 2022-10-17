@@ -15,12 +15,13 @@ from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
 import operator
 import math
+import streamlit as st
+import json
 
 
 class Diversity:
     NUM_WORKERS = 16
-    #ss_filters = None
-    #propfilters = None
+
     def DiversitySelection (self, infile, out_file, n_analyzed, ss_file, deprotect_specfile,
                             exclude_file, n_cmpds, keeporder, priority_col, priority_val, propfilters):
         print (infile)
@@ -59,7 +60,6 @@ class Diversity:
         self.Generate_UMAP(incmpd_list, out_list, out_file.replace('.csv', '.png'), out_file.replace('.csv', '.umap.csv'))
         f.close()
         return
-
     def filters_scaffolds (self, df, n_analyzed, idcol, smilescol,origsmilescol,
                            deprotect_specfile, ss_file,  exclude_file, propfilters):
         scaffdict = {}
@@ -167,7 +167,6 @@ class Diversity:
         out_filter_file.close()
         out_deprot_file.close()
         return scaffdict, incmpd_list
-
     def choose_compounds (self, scaffdict, scaff_clusters, medoids, out_file, smilescol, origsmilescol,
                           priority_col, priority_val):
 
@@ -268,8 +267,6 @@ class Diversity:
             cluster_num += 1
 
         return out_list
-
-
     def Kmeans (self, cmpdlist, num_clusters):
         fplist, uniquect = self.Get_FPArray(cmpdlist)
         if num_clusters > uniquect:
@@ -283,7 +280,6 @@ class Diversity:
         closest, _ = pairwise_distances_argmin_min(kmeans.cluster_centers_, fplist)
 
         return res_dict, closest, num_clusters
-
     def Analyze_SimStats (self, cmpd_list):
         fp_list = []
         for smi in cmpd_list:
@@ -293,7 +289,6 @@ class Diversity:
         for idx in range (0,len(fp_list)):
             res = Chem.DataStructs.BulkTanimotoSimilarity(fp_list [idx], fp_list)
             print (len([element for element in res if element > .5]))
-
     def CheckListScaffoldMatch (self,rowinfo, scaffdict, m):
         s = MScaff.MakeScaffoldGeneric(m)
         s = MScaff.GetScaffoldForMol(s)
@@ -309,7 +304,6 @@ class Diversity:
             ret = 1
 
         return scaffdict, ret
-
     # def Filters (self, m, filter_dict):
     #     if filter_dict is None:
     #         return False;
@@ -342,7 +336,6 @@ class Diversity:
     #             return True
     #
     #     return False
-
     def Get_FPArray(self, cmpdlist):
         def get_numpy_fp(smi):
             mol = Chem.MolFromSmiles(smi)
@@ -363,7 +356,6 @@ class Diversity:
             fplist.append(arr)
         uniquect = len(cmpdlist)- dupct
         return fplist, uniquect
-
     def Get_FPArrayAsVstack(self, cmpdlist, hidetqdm=False, verbose = True):
         fplist = []
         deletedfps = []
@@ -391,7 +383,6 @@ class Diversity:
                 fplist.append(fp)
             ct += 1
         return np.vstack(fplist), deletedfps
-
     def Get_FPArray_dask(self, inlist, rettype = 'vstack', NUM_WORKERS=16, showprog = True, hidetqdm=False, verbose = True):
         def fptaskfcn(row):
             if row == 'FAIL' or row == 'ENUMERATION_FAIL':
@@ -432,8 +423,6 @@ class Diversity:
             fplist = np.array (fplist)
         print ('fps complete')
         return fplist, deletedfps
-
-
     def DiSE_Selection (self, infile, outfile, rankcol, simcutoff, scaffold_sim_cutoff, n_chosen, minrankscore, maxviolations, hardsimcutoff, maxbbusage):
         df = pd.read_csv(infile)
         df = df.sort_values (rankcol, ascending=False)
@@ -501,34 +490,44 @@ class Diversity:
             # chosen += 1
             # if chosen >= n_chosen:
             #     break
-
     def generatefps_dask(self, inlist, showprog=True, bitvec=False):
-        def fptaskfcn(row, bitvec):
+        def fptaskfcn(row, bitvec, showprog):
             try:
-                m = Chem.MolFromSmiles(row)
+                if type (row) == str:
+                    m = Chem.MolFromSmiles(row)
+                else:
+                    m = Chem.MolFromSmiles(row['SMILES'])
                 if not bitvec:
                     fp = Chem.GetHashedMorganFingerprint(m, radius=2, nBits=1024, useFeatures=False)
                 else:
                     fp =Chem.GetMorganFingerprintAsBitVect(m, radius=2, nBits=1024, useFeatures=False)
             except:
-                print('bad row:', row)
+                if showprog:
+                    print('bad row:', row)
                 return None
             return fp
-
-        if (type(inlist[0]) == str):
-            slist = inlist
+        dfmode = False
+        if (type(inlist) == pd.DataFrame):
+            inseries = inlist
+            dfmode = True
         else:
-            slist = []
-            for c in inlist:
-                slist.append(c[0])
-        inseries = pd.Series(slist)
+            if (type(inlist[0]) == str):
+                slist = inlist
+            else:
+                slist = []
+                for c in inlist:
+                    slist.append(c[0])
+            inseries = pd.Series(slist)
 
         ddf = dd.from_pandas(inseries, npartitions=self.NUM_WORKERS)
         if showprog:
             pbar = ProgressBar()
             pbar.register()
 
-        res = ddf.apply(fptaskfcn, args=([bitvec]), meta=(0, object)).compute()
+        if dfmode:
+            res = ddf.apply(fptaskfcn, axis = 1, args=([bitvec, showprog]), meta=(0, object)).compute()
+        else:
+            res = ddf.apply(fptaskfcn, args=([bitvec, showprog]), meta=(0, object)).compute()
 
         if showprog:
             pbar.unregister()
@@ -539,18 +538,46 @@ class Diversity:
 
     def compfps_dask(self, fplist, compfplist, showprog=True):
         def comptaskfcn(row, compfplist):
-            tanlist = Chem.DataStructs.BulkTanimotoSimilarity(row, compfplist)
+            try:
+                tanlist = [round (x,2) for x in Chem.DataStructs.BulkTanimotoSimilarity(row, compfplist)]
+            except:
+                return [None] * len(compfplist)
             return tanlist
-        fp_series = pd.Series(fplist)
+        dfmode = False
+        if type(fplist) == pd.DataFrame:
+            fp_series = fplist
+            dfmode = True
+        else:
+            fp_series = pd.Series(fplist)
         ddf = dd.from_pandas(fp_series, npartitions=self.NUM_WORKERS)
 
         if showprog:
             pbar = ProgressBar()
             pbar.register()
-        res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute()
+        if dfmode:
+            res = ddf.apply(comptaskfcn, axis = 1 , args=([compfplist]), meta=(0, object)).compute()
+        else:
+            res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute()
         if showprog:
             pbar.unregister()
         return list(res)
+
+    @staticmethod
+    def Run_SimilarityComp ( smiles, filename ):
+        div = Diversity ()
+        if type (smiles) == str:
+            smileslist = [smiles]
+
+        smilesfps = div.generatefps_dask(smileslist, showprog=False)
+        filedf = pd.read_csv(filename)
+        filefps = div.generatefps_dask(filedf, showprog=False)
+
+        res = div.compfps_dask(filefps, smilesfps)
+        resdf = pd.DataFrame (res, columns = smileslist)
+        filedf = pd.concat([filedf,  resdf], axis=1)
+        print (filedf)
+        filedf.to_csv (filename.replace ('.csv', '') + '.simrun.csv')
+
 
 class Similarity:
     enum = Enumerate.Enumerate ()
@@ -750,4 +777,42 @@ class Similarity:
             res.append (sumtanscores/tanct)
         return res
 
+class Chem_Similarity_DiversityUI:
+    initpath = '../CIxTools.init.json'
+    paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles']
 
+    def __init__ (self):
+        f = open(self.initpath)
+        initjson = json.load(f)
+        f.close()
+        for p in self.paramslist:
+            if p not in st.session_state or st.session_state[p] == None or st.session_state [p] == '' :
+                if p in initjson:
+                    st.session_state[p] = initjson [p]
+                else:
+                    st.session_state[p] = ''
+    def body (self):
+        st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
+            Umap Chemspace Visualization</h1>""", unsafe_allow_html=True)
+        inputfile = st.text_input (label = 'input file', key = 'simdiv_inputfile', on_change=self.SaveToInit)
+        smiles = st.text_input (label = 'input smiles', key = 'simdiv_inputsmiles', on_change=self.SaveToInit)
+        if st.button (label = 'Run Similarity (smiles v. file)'):
+            with st.spinner('Running Similarity'):
+                Diversity.Run_SimilarityComp ( smiles, inputfile)
+
+    def SaveToInit(self):
+
+        with open(self.initpath, "r") as jsonFile:
+            data = json.load(jsonFile)
+        for p in self.paramslist:
+            if p in st.session_state:
+                data[p] = st.session_state[p]
+        with open(self.initpath, "w") as jsonFile:
+            jsonFile.write(json.dumps(data, indent=4))
+
+    def RunUI (self):
+        self.body ()
+
+if __name__ == "__main__":
+    csvis = Chem_Similarity_DiversityUI ()
+    csvis.RunUI()

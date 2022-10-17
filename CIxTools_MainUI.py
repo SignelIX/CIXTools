@@ -2,6 +2,7 @@ import streamlit as st
 import Enumerate
 import Chem_SpaceVisualization as ChSV
 import Chem_CalcProps
+import Chem_Similarity_Diversity
 
 
 class CIXTools_MainUI:
@@ -21,8 +22,9 @@ class CIXTools_MainUI:
         pg = None
         btnlist = [
             ('ENUM', 'Enumeration', Enumerate.EnumerationUI),
-            ('CHEMSPACE', 'Display Chemical Space', ChSV.CSV_UI),
-            ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps.Chem_CalcPropsUI)
+            ('CHEMSPACE', 'Display Chemical Space', ChSV.Chem_SpaceVisualizationUI),
+            ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps.Chem_CalcPropsUI),
+            ('SIMILARITY', 'Similarity Analysis', Chem_Similarity_Diversity.Chem_Similarity_DiversityUI)
         ]
         for b in btnlist:
             btn  = st.sidebar.button(b[1])

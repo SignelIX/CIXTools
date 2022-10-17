@@ -393,7 +393,7 @@ class Enumerate:
             df =  df.append (dp_list)
             df.to_csv (dp_outfile)
 
-    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = []):
+    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False):
 
 
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct):
@@ -758,18 +758,21 @@ class Enumerate:
 
 class EnumerationUI():
     enum = Enumerate()
-    rootpath = ''
     initpath = '../CIxTools.init.json'
     smiles_colnames = None
     bbid_colnames = None
+    paramslist = ['enumerate_rxnscheme', 'enumerate_remdups', 'enumerate_lastschemedef', 'enumerate_lastschemepath', 'enumerate_specstr', 'enumerate_schemename', 'enumerate_rndcount']
 
     def __init__ (self):
         f = open(self.initpath)
         initjson = json.load(f)
-        f.close ()
-        if 'schemedef' not in st.session_state:
-            st.session_state ['scheme_def'] = ''
-        self.rootpath = initjson ['lastrootpath']
+        f.close()
+        for p in self.paramslist:
+            if p not in st.session_state or st.session_state[p] == None or st.session_state [p] == '' :
+                if p in initjson:
+                    st.session_state[p] = initjson [p]
+                else:
+                    st.session_state[p] = ''
 
 
     def head(self):
@@ -810,59 +813,61 @@ class EnumerationUI():
         return dflist
 
     def SaveScheme (self):
-        with open(st.session_state.rxscheme, "r") as jsonFile:
+        with open(st.session_state['enumerate_rxnscheme'], "r") as jsonFile:
             data = json.load(jsonFile)
-        schemejson = json.loads (st.session_state.schemedef)
-        data[st.session_state.scheme] = schemejson
-        with open(st.session_state.rxscheme, "w") as jsonFile:
+        schemejson = json.loads (st.session_state ['enumerate_lastschemedef'])
+        data[st.session_state['enumerate_schemename']] = schemejson
+        with open(st.session_state['enumerate_rxnscheme'], "w") as jsonFile:
             json.dump(data, jsonFile, indent=4)
 
     def SetScheme (self):
         for k in st.session_state.keys ():
             if k.startswith( 'bb') and k.endswith('idx'):
                 st.session_state[k] = 0
-        with open(st.session_state.rxscheme, "r") as jsonFile:
+        with open(st.session_state['enumerate_rxnscheme'], "r") as jsonFile:
             data = json.load(jsonFile)
-            st.session_state.schemedef = json.dumps (data [st.session_state.scheme], indent=4)
+            if st.session_state['enumerate_schemename'] in data:
+                st.session_state ['enumerate_lastschemedef'] = json.dumps (data [st.session_state['enumerate_schemename']], indent=4)
 
     def SaveToInit(self):
+
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
-        data["lastrootpath"] = st.session_state.rxscheme.replace ('RxnSchemes.json', '')
-        if 'schemedef' in st.session_state:
-            data["lastschemedef"] = st.session_state.schemedef
-        if 'schemepath' in st.session_state:
-            data["lastschemepath"] = st.session_state.schemepath
+        for p in self.paramslist:
+            if p in st.session_state:
+                data[p] = st.session_state[p]
         with open(self.initpath, "w") as jsonFile:
-            json.dump(data, jsonFile)
+            print (json.dumps(data, indent=4))
+            jsonFile.write(json.dumps(data, indent=4))
 
     def body(self):
         smilescol='SMILES'
 
-        if 'specstr' not in st.session_state:
-            st.session_state['specstr'] = 'Empty'
-        rxnschemefile = st.text_input(value=self.rootpath + 'RxnSchemes.json', label='rxscheme', on_change=self.SaveToInit, key='rxscheme')
+        if 'enumerate_specstr' not in st.session_state:
+            st.session_state['enumerate_specstr'] = 'Empty'
+
+        rxnschemefile = st.text_input(  label='Rxn Scheme File', on_change=self.SaveToInit, key='enumerate_rxnscheme')
         if os.path.exists(rxnschemefile) == False:
             st.text (rxnschemefile + ' does not exist. Please adjust path')
             return
 
-        lspath = st.text_input(value=self.rootpath, label='scheme path', on_change=self.SaveToInit, key = 'schemepath')
+        lspath = st.text_input( label='Scheme Path', on_change=self.SaveToInit, key = 'enumerate_lastschemepath')
 
-        ls = lspath.replace(self.rootpath, '')
+        ls = lspath.replace(st.session_state['enumerate_rxnscheme'], '')
 
         f = open(rxnschemefile, 'r')
         schemejson = json.load(f)
         schemelist = []
 
-        if 'schemename' not in st.session_state:
-            st.session_state['schemename'] = ls
+        if 'enumerate_schemename' not in st.session_state:
+            st.session_state['enumerate_schemename'] = ls
             bbpath =lspath +  '/BBLists'
         else:
-            if 'specstr' in st.session_state:
-                specstr = '/' + st.session_state['specstr']
+            if 'enumerate_specstr' in st.session_state:
+                specstr = '/' + st.session_state['enumerate_specstr']
             else:
                 specstr = ''
-            bbpath = lspath + st.session_state['schemename'] + specstr +  '/BBLists'
+            bbpath = lspath + st.session_state['enumerate_schemename'] + specstr +  '/BBLists'
 
         for s in schemejson:
             schemelist.append(s)
@@ -884,10 +889,9 @@ class EnumerationUI():
             with ccontA:
                 newname = st.text_input(label = 'New Scheme Name' )
                 if st.button (label = 'Add New Scheme'):
-                    st.session_state.schemename= newname
+                    st.session_state ['enumerate_schemename']= newname
                     ls = newname
-                    st.session_state.scheme = newname
-                    st.session_state.schemedef = '{}'
+                    st.session_state ['enumerate_lastschemedef'] = '{}'
                     self.SaveScheme()
                     schemelist.append (newname)
 
@@ -900,20 +904,25 @@ class EnumerationUI():
                 else:
                     lsidx = schemelist.index(ls)
 
-                schemename = st.selectbox(label='Scheme', options=schemelist, key='scheme', index=lsidx)
-                spec = st.text_input(key='spec', label='spec')
+                schemename = st.selectbox(label='Scheme', options=schemelist, key='schemename', index=lsidx)
+                specstr = st.text_input(key='spec', label='specstr')
 
-                if schemename != st.session_state['schemename'] or spec != st.session_state['specstr']:
+                if schemename != st.session_state['enumerate_schemename'] or specstr != st.session_state['enumerate_specstr']:
                     addspec = ''
-                    if spec != '' and spec is not None:
-                        addspec = '/' + spec
+                    if specstr != '' and specstr is not None:
+                        addspec = '/' + specstr
 
-                    dfs  = self.UpdateBBDfs(self.rootpath + schemename + addspec +'/BBLists', True)
+                    dfs  = self.UpdateBBDfs( st.session_state['enumerate_lastschemepath'] + schemename + addspec +'/BBLists', True)
                     self.SetScheme()
 
-                st.session_state['schemename'] = schemename
-                st.session_state['specstr'] = spec
-                if 'schemedef' not in st.session_state:
+                    st.session_state['enumerate_schemename'] = schemename
+                    st.session_state['enumerate_specstr'] = specstr
+                    self.SaveToInit()
+                else:
+                    st.session_state['enumerate_schemename'] = schemename
+                    st.session_state['enumerate_specstr'] = specstr
+
+                if 'enumerate_lastschemedef' not in st.session_state:
                     self.SetScheme()
 
                 for n in range (0, len(dfs)) :
@@ -939,7 +948,7 @@ class EnumerationUI():
                 if st.button (label='save scheme'):
                     self.SaveScheme()
             with ccont:
-                st.text_area(height=200, label='Scheme Definition', key='schemedef')
+                st.text_area(height=200, label='Scheme Definition', key='enumerate_schemedef', on_change=self.SaveToInit)
 
         with cont2:
             col1, col2, col3 = st.columns(3)
@@ -958,7 +967,12 @@ class EnumerationUI():
             with col3:
 
                 expval = st.button('Export Random Selection')
-                countval = st.text_input(label='Count', key='rndcount', value = 5000 )
+                countval = st.text_input(label='Count', key='enumerate_rndcount', on_change=self.SaveToInit )
+                remdup_val = False
+                if 'enumerate_remdups' in st.session_state:
+                    if st.session_state ['enumerate_remdups'] == 'True':
+                        remdup_val = True
+                remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
                 if expval:
                     try:
                         ct = int (countval)
@@ -966,9 +980,9 @@ class EnumerationUI():
                         ct = 5000
 
                     addspec = ''
-                    if spec != '' and spec is not None:
-                        addspec = '/' + spec
-                    self.enum.EnumFromBBFiles(schemename, spec, spec, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames)
+                    if specstr != '' and specstr is not None:
+                        addspec = '/' + specstr
+                    self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames)
 
         with cont3:
             if Enumerate == True:
@@ -977,7 +991,7 @@ class EnumerationUI():
                         st.text('Reactants not correctly loaded')
                     else:
                         try:
-                            res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state.schemedef, True)
+                            res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state ['enumerate_lastschemedef'], True)
                             if res is None or res == 'FAIL':
                                 st.text ('Reaction Failure')
                             else:

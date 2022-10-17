@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib
 import plotly.express as px
 import pathlib
+import mail
 
 class Chem_SpaceVisualization:
     clrs = ['red','blue','purple','black', 'orange', 'aqua', 'darkgreen', 'darkblue']
@@ -197,6 +198,12 @@ class Chem_SpaceVisualization:
                 patches.append (matplotlib.patches.Patch(color=legendlabels[cx], label=cx))
         plt.legend(loc='upper right', handles = patches)
         plt.savefig(fig_fname)
+        if fig_fname.endswith ('.png'):
+            svgname = fig_fname.replace ('.png', '.svg')
+        else:
+            svgname = fig_fname + '.svg'
+
+        plt.savefig(svgname, format='svg')
         plt.show ()
 
         if modeloutfile is not None:
@@ -306,25 +313,21 @@ class Chem_SpaceVisualizationUI:
                 st.image(imgfile)
                 if plotlyfig is not None:
                     st.plotly_chart(plotlyfig)
-
-        outpath = st.text_input (label ='chemspace_outpath', key='chemspace_outpath', on_change=self.SaveToInit)
-        outprefix = st.text_input (label='chemspace_outprefix', key='chemspace_outprefix',on_change=self.SaveToInit)
-        strucct = st.text_input(label='chemspace_strucct', key='chemspace_strucct',  on_change=self.SaveToInit)
-        infilelist = st.text_area (label='chemspace_infilelist', key='chemspace_infilelist', on_change=self.SaveToInit).strip ().split ('\n')
-        pkfile = st.text_input(label='chemspace_pklfile', key='chemspace_pklfile', on_change=self.SaveToInit )
-
-        underlying_mapfile = pkfile.replace ('.pkl', '.csv')
-
-
-
-        if st.button(label='run umap vs model', key='RunUMAPvModel'):
-            with st.spinner('Building Map...'):
-                fig_file, plotlyfig = self.ChSV.ChemicalSpace_UMap(outpath, outprefix, infilelist, ['red', 'blue', 'aqua', 'purple'],
-                                                   pkfile, int(strucct), underlying_mapfile)
-                st.image(fig_file)
-                if plotlyfig is not None:
-                    st.plotly_chart(plotlyfig)
-                st.success('Done!')
+        with st.expander(label='Run Visualization', expanded= True):
+            outpath = st.text_input (label ='chemspace_outpath', key='chemspace_outpath', on_change=self.SaveToInit)
+            outprefix = st.text_input (label='chemspace_outprefix', key='chemspace_outprefix',on_change=self.SaveToInit)
+            strucct = st.text_input(label='chemspace_strucct', key='chemspace_strucct',  on_change=self.SaveToInit)
+            infilelist = st.text_area (label='chemspace_infilelist', key='chemspace_infilelist', on_change=self.SaveToInit).strip ().split ('\n')
+            pkfile = st.text_input(label='chemspace_pklfile', key='chemspace_pklfile', on_change=self.SaveToInit )
+            underlying_mapfile = pkfile.replace ('.pkl', '.csv')
+            if st.button(label='run umap vs model', key='RunUMAPvModel'):
+                with st.spinner('Building Map...'):
+                    fig_file, plotlyfig = self.ChSV.ChemicalSpace_UMap(outpath, outprefix, infilelist, ['red', 'blue', 'aqua', 'purple'],
+                                                       pkfile, int(strucct), underlying_mapfile)
+                    st.image(fig_file)
+                    if plotlyfig is not None:
+                        st.plotly_chart(plotlyfig)
+                    st.success('Done!')
 
     def SaveToInit(self):
 
