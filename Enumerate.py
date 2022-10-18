@@ -761,7 +761,7 @@ class EnumerationUI():
     initpath = '../CIxTools.init.json'
     smiles_colnames = None
     bbid_colnames = None
-    paramslist = ['enumerate_rxnscheme', 'enumerate_remdups', 'enumerate_lastschemedef', 'enumerate_lastschemepath', 'enumerate_specstr', 'enumerate_schemename', 'enumerate_rndcount']
+    paramslist = ['enumerate_rxnscheme', 'enumerate_remdups',  'enumerate_lastschemepath', 'enumerate_specstr', 'enumerate_schemename', 'enumerate_rndcount']
 
     def __init__ (self):
         f = open(self.initpath)
@@ -828,6 +828,8 @@ class EnumerationUI():
             data = json.load(jsonFile)
             if st.session_state['enumerate_schemename'] in data:
                 st.session_state ['enumerate_lastschemedef'] = json.dumps (data [st.session_state['enumerate_schemename']], indent=4)
+                self.SaveToInit()
+
 
     def SaveToInit(self):
 
@@ -837,7 +839,6 @@ class EnumerationUI():
             if p in st.session_state:
                 data[p] = st.session_state[p]
         with open(self.initpath, "w") as jsonFile:
-            print (json.dumps(data, indent=4))
             jsonFile.write(json.dumps(data, indent=4))
 
     def body(self):
@@ -853,7 +854,11 @@ class EnumerationUI():
 
         lspath = st.text_input( label='Scheme Path', on_change=self.SaveToInit, key = 'enumerate_lastschemepath')
 
-        ls = lspath.replace(st.session_state['enumerate_rxnscheme'], '')
+        if ('schemename' in st.session_state):
+            ls = st.session_state['schemename']
+        else:
+            ls = ''
+        print (ls)
 
         f = open(rxnschemefile, 'r')
         schemejson = json.load(f)
@@ -861,21 +866,22 @@ class EnumerationUI():
 
         if 'enumerate_schemename' not in st.session_state:
             st.session_state['enumerate_schemename'] = ls
-            bbpath =lspath +  '/BBLists'
+            bbpath = lspath +  '/BBLists'
+            specstr = ''
         else:
             if 'enumerate_specstr' in st.session_state:
-                specstr = '/' + st.session_state['enumerate_specstr']
+                specstr = st.session_state['enumerate_specstr']
+                slash_specstr = '/' + specstr
             else:
                 specstr = ''
-            bbpath = lspath + st.session_state['enumerate_schemename'] + specstr +  '/BBLists'
+                slash_specstr = ''
+            bbpath = lspath + st.session_state['enumerate_schemename'] + slash_specstr +  '/BBLists'
 
         for s in schemejson:
             schemelist.append(s)
         schemelist.sort ()
 
         dfs = self.UpdateBBDfs(bbpath, False)
-        print ('LEN DFS', len (dfs))
-
         with st.expander (label='Scheme Definition Tools'):
             cont1 = st.container ()
         cont2 = st.container()
@@ -889,22 +895,35 @@ class EnumerationUI():
             with ccontA:
                 newname = st.text_input(label = 'New Scheme Name' )
                 if st.button (label = 'Add New Scheme'):
-                    st.session_state ['enumerate_schemename']= newname
+                    st.session_state['enumerate_schemename']= newname
                     ls = newname
-                    st.session_state ['enumerate_lastschemedef'] = '{}'
+                    st.session_state ['enumerate_lastschemedef'] = '{\n"altnames":[],\n"steps":[\n{"stepname":"",\n"Reactants":["",""],\n"Rxns":{\n"default":[]\n}\n}\n],"scaffold_dummy_structures": [], "filters":{"names":{}, "BBfilters":{}}}'
                     self.SaveScheme()
+                    self.SetScheme()
                     schemelist.append (newname)
+                    dfs = []
+
+        with cont2:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button('random'):
+                    for dx in range(0, len(dfs)):
+                        if dfs[dx] is not None:
+                            st.session_state['bb' + str(dx) + 'idx'] = dfs[dx].index[random.randint(0, len(dfs[dx]))]
+                    Enumerate = True
 
         with cont3:
-
             colx1, colx2 = st.columns(2)
             with colx1:
-                if ls not in schemelist:
+                if ls == '' or ls not in schemelist:
                     lsidx = 0
                 else:
                     lsidx = schemelist.index(ls)
+                if  'spec' not in st.session_state and specstr is not None and specstr != '':
+                    st.session_state['spec'] = specstr
 
-                schemename = st.selectbox(label='Scheme', options=schemelist, key='schemename', index=lsidx)
+
+                schemename = st.selectbox(label='Scheme', options=schemelist, key= 'schemename', index=lsidx)
                 specstr = st.text_input(key='spec', label='specstr')
 
                 if schemename != st.session_state['enumerate_schemename'] or specstr != st.session_state['enumerate_specstr']:
@@ -913,17 +932,11 @@ class EnumerationUI():
                         addspec = '/' + specstr
 
                     dfs  = self.UpdateBBDfs( st.session_state['enumerate_lastschemepath'] + schemename + addspec +'/BBLists', True)
-                    self.SetScheme()
-
                     st.session_state['enumerate_schemename'] = schemename
                     st.session_state['enumerate_specstr'] = specstr
                     self.SaveToInit()
-                else:
-                    st.session_state['enumerate_schemename'] = schemename
-                    st.session_state['enumerate_specstr'] = specstr
-
-                if 'enumerate_lastschemedef' not in st.session_state:
                     self.SetScheme()
+
 
                 for n in range (0, len(dfs)) :
                     if 'bb' + str(n) + 'idx' not in st.session_state:
@@ -938,9 +951,9 @@ class EnumerationUI():
                              rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
                                  , key='bb' + str (n ),
                                    index=int(st.session_state['bb' + str(n) + 'idx']))
-                    print ('INDEX', st.session_state['bb' + str(n) + 'idx'])
         with cont1:
             ccol1, ccol2 = st.columns(2)
+            st.text ('Current Scheme: '  + st.session_state['enumerate_schemename'])
             with ccol1:
                 if st.button (label='revert'):
                     self.SetScheme()
@@ -948,17 +961,9 @@ class EnumerationUI():
                 if st.button (label='save scheme'):
                     self.SaveScheme()
             with ccont:
-                st.text_area(height=200, label='Scheme Definition', key='enumerate_schemedef', on_change=self.SaveToInit)
+                st.text_area(height=200, label='Scheme Definition', key='enumerate_lastschemedef')
 
         with cont2:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button('random'):
-                    for dx in range (0, len(dfs)):
-                        if dfs[dx] is not None:
-                            st.session_state['bb' + str(dx) + 'idx'] = dfs [dx].index[random.randint(0, len(dfs[dx]))]
-                    Enumerate = True
-
             with col2:
                 if st.button('enumerate'):
                     Enumerate = True
@@ -972,7 +977,7 @@ class EnumerationUI():
                 if 'enumerate_remdups' in st.session_state:
                     if st.session_state ['enumerate_remdups'] == 'True':
                         remdup_val = True
-                remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
+                # remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
                 if expval:
                     try:
                         ct = int (countval)
