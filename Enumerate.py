@@ -491,9 +491,9 @@ class Enumerate:
             hdrs = None
 
         gc.collect ()
-        self.DoParallel_Enumeration (enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct)
+        self.DoParallel_Enumeration (enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts)
 
-    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1):
+    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False):
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
             rxtnts = []
             for ix in range (0, cycct):
@@ -508,7 +508,7 @@ class Enumerate:
                 print(rxtnts)
 
             return res
-        def processchunk (resdf, df):
+        def processchunk (resdf, df, outpath):
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
@@ -550,17 +550,26 @@ class Enumerate:
             df = None
             for chunk in reader:
                 resdf = pd.DataFrame (chunk, columns = hdrs)
-                df = processchunk(resdf, df)
+                df = processchunk(resdf, df, outpath)
         else:
             df = None
-            df = processchunk(enum_in, df)
+            df = processchunk(enum_in, df, outpath)
+
 
         if outpath is not None:
-            return outpath + '.' + outsuff + '.all.csv'
+            if removeduplicateproducts:
+                df= pd.read_csv (outpath + '.' + outsuff + '.all.csv')
+                df = df.drop_duplicates(keep='first', subset = ['full_smiles'])
+                df.to_csv(outpath + '.' + outsuff + '.dedup.csv')
+                return outpath + '.' + outsuff + '.dedup.csv'
+            else:
+                return outpath + '.' + outsuff + '.all.csv'
         else:
+            if removeduplicateproducts:
+                df = df.drop_duplicates(keep='first', subset = ['full_smiles'])
             return df
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = []):
+    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False):
         print ('inpath: ', inpath,  libname,  num_strux)
         bbspecprefix = ''
         outspecprefix = ''
@@ -586,7 +595,7 @@ class Enumerate:
         outpath = inpath + foldername + '/Samples/' + libname
         if  outspec != '' and outspec is not None:
             outpath += '.' + outspec
-        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames)
+        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups)
         return outfile
 
     def FilterBBs(self, bbdict, filterfile):
@@ -830,9 +839,7 @@ class EnumerationUI():
                 st.session_state ['enumerate_lastschemedef'] = json.dumps (data [st.session_state['enumerate_schemename']], indent=4)
                 self.SaveToInit()
 
-
     def SaveToInit(self):
-
         with open(self.initpath, "r") as jsonFile:
             data = json.load(jsonFile)
         for p in self.paramslist:
@@ -903,14 +910,6 @@ class EnumerationUI():
                     schemelist.append (newname)
                     dfs = []
 
-        with cont2:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button('random'):
-                    for dx in range(0, len(dfs)):
-                        if dfs[dx] is not None:
-                            st.session_state['bb' + str(dx) + 'idx'] = dfs[dx].index[random.randint(0, len(dfs[dx]))]
-                    Enumerate = True
 
         with cont3:
             colx1, colx2 = st.columns(2)
@@ -930,7 +929,6 @@ class EnumerationUI():
                     addspec = ''
                     if specstr != '' and specstr is not None:
                         addspec = '/' + specstr
-
                     dfs  = self.UpdateBBDfs( st.session_state['enumerate_lastschemepath'] + schemename + addspec +'/BBLists', True)
                     st.session_state['enumerate_schemename'] = schemename
                     st.session_state['enumerate_specstr'] = specstr
@@ -964,30 +962,38 @@ class EnumerationUI():
                 st.text_area(height=200, label='Scheme Definition', key='enumerate_lastschemedef')
 
         with cont2:
+            with st.expander (label='Export'):
+                with st.spinner ('Exporting'):
+                    expval = st.button('Export Random Selection')
+                    countval = st.text_input(label='Count', key='enumerate_rndcount', on_change=self.SaveToInit )
+                    remdup_val = False
+                    if 'enumerate_remdups' in st.session_state:
+                        if st.session_state ['enumerate_remdups'] == 'True':
+                            remdup_val = True
+                    remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
+                    if expval:
+                        try:
+                            ct = int (countval)
+                        except:
+                            ct = 5000
+
+                        addspec = ''
+                        if specstr != '' and specstr is not None:
+                            addspec = '/' + specstr
+                        self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
+
+        with cont2:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button('random'):
+                    for dx in range(0, len(dfs)):
+                        if dfs[dx] is not None:
+                            st.session_state['bb' + str(dx) + 'idx'] = dfs[dx].index[random.randint(0, len(dfs[dx]))]
+                    Enumerate = True
             with col2:
                 if st.button('enumerate'):
                     Enumerate = True
 
-
-            with col3:
-
-                expval = st.button('Export Random Selection')
-                countval = st.text_input(label='Count', key='enumerate_rndcount', on_change=self.SaveToInit )
-                remdup_val = False
-                if 'enumerate_remdups' in st.session_state:
-                    if st.session_state ['enumerate_remdups'] == 'True':
-                        remdup_val = True
-                # remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
-                if expval:
-                    try:
-                        ct = int (countval)
-                    except:
-                        ct = 5000
-
-                    addspec = ''
-                    if specstr != '' and specstr is not None:
-                        addspec = '/' + specstr
-                    self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames)
 
         with cont3:
             if Enumerate == True:
