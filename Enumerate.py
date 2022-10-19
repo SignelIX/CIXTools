@@ -543,6 +543,9 @@ class Enumerate:
         if rndct != -1:
             outsuff = str(rndct)
         f = open(outpath + '.' + outsuff + '.all.csv', 'w')
+        hdrs.append ('full_smiles')
+        f.write(','.join(hdrs))
+        f.write ('\n')
         f.close()
 
         if type (enum_in) is str:
@@ -557,17 +560,18 @@ class Enumerate:
 
 
         if outpath is not None:
-            if removeduplicateproducts:
-                df= pd.read_csv (outpath + '.' + outsuff + '.all.csv')
-                df = df.drop_duplicates(keep='first', subset = ['full_smiles'])
-                df.to_csv(outpath + '.' + outsuff + '.dedup.csv')
-                return outpath + '.' + outsuff + '.dedup.csv'
-            else:
-                return outpath + '.' + outsuff + '.all.csv'
+            self.Deduplicate (outpath, outsuff)
+            return outpath + '.' + outsuff + '.all.csv'
         else:
             if removeduplicateproducts:
                 df = df.drop_duplicates(keep='first', subset = ['full_smiles'])
             return df
+
+    def Deduplicate (self, outpath, outsuff):
+        df = pd.read_csv(outpath + '.' + outsuff + '.all.csv')
+        print (df.columns)
+        df = df.drop_duplicates(keep='first', subset=['full_smiles'])
+        df.to_csv(outpath + '.' + outsuff + '.all.dedup.csv')
 
     def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False):
         print ('inpath: ', inpath,  libname,  num_strux)
