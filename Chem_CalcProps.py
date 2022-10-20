@@ -5,6 +5,8 @@ import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 import streamlit as st
 import json
+import matplotlib.pyplot as plt
+import math
 
 class Chem_CalcProps:
     def addPropsToFile (self, infile, outfilename,  smiles_col = 'SMILES', bbidcols = ['bb1', 'bb2','bb3']):
@@ -45,6 +47,27 @@ class Chem_CalcProps:
         df = df.merge(res, left_index=True, right_index=True)
         df.to_csv(outfilename, index=False)
         pbar.unregister()
+        self.GeneratePlots (df, outfilename, ['SlogP', 'TPSA', 'RBs', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW' ])
+
+    def GeneratePlots (self, df, infilename, props = ['SlogP', 'TPSA', 'RBs', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW' ]):
+        if df is None:
+            df = pd.read_csv (infilename)
+        plotlen = len (props)
+        gridwidth = 2
+        plt.tight_layout ()
+        plt.subplots_adjust(left=0.15, right=.9, top=0.9, bottom=0.1)
+        grid = plt.GridSpec(math.ceil (plotlen/2), gridwidth, wspace=1.2, hspace=2.0)
+
+        ct = 0
+        for p in props:
+            subplt = plt.subplot( grid[int(ct/gridwidth), ct % gridwidth])
+            subplt.hist(df[p], edgecolor = 'black', color='red')
+            ct += 1
+            subplt.set (xlabel=p, ylabel = 'Count')
+            plt.title(p + " Histogram")
+        plt.savefig(infilename + '.props_hist.png')
+
+        return infilename + '.props_hist.png'
 
     def addPropsToFile2 (self, infile, outfile, proplist):
         df = pd.read_csv(infile)
@@ -89,7 +112,7 @@ props = Chem_CalcProps ()
 
 class Chem_CalcPropsUI:
     initpath = '../CIxTools.init.json'
-    paramslist = ['props_smilescol', 'props_bbidcols', 'props_infile']
+    paramslist = ['props_smilescol', 'props_bbidcols', 'props_infile', 'props_filepath']
 
     def __init__(self):
         f = open(self.initpath)
@@ -115,13 +138,22 @@ class Chem_CalcPropsUI:
         filename = st.text_input (label = 'Props Input File', key = 'props_infile',  on_change=self.SaveToInit)
         smiles_col = st.text_input(label='SMILES Column', key='props_smilescol',  on_change=self.SaveToInit)
         bbidcols = st.text_input(label='BBID Cols', key='props_bbidcols',  on_change=self.SaveToInit).split(',')
-        RunClusters = st.button(label='Run', key='RunProps')
-        if RunClusters == True:
-            outfile = filename.replace ('.csv', '.props.csv')
-            if outfile == filename:
-                st.text ('Incompatible input file, .csv file is required')
-                return
-            props.addPropsToFile(filename, outfile,  smiles_col, bbidcols)
+        with st.spinner('Calculating...'):
+            RunClusters = st.button(label='Run', key='RunProps')
+            if RunClusters == True:
+                outfile = filename.replace ('.csv', '.props.csv')
+                if outfile == filename:
+                    st.text ('Incompatible input file, .csv file is required')
+                    return
+                props.addPropsToFile(filename, outfile,  smiles_col, bbidcols)
+        with st.expander ('Property Graphs'):
+            infile = st.text_input ('property file path', key='props_filepath', on_change=self.SaveToInit)
+            gen_graphs = st.button ('Generate Graphs')
+            if gen_graphs:
+                with st.spinner ('Generating Plots...'):
+                    res  = props.GeneratePlots(None, infile )
+                    print (res)
+                    st.image (res)
         return
 
     def SaveToInit(self):

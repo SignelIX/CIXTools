@@ -30,7 +30,7 @@ import copy
 
 class Enumerate:
     rxndict = {}
-    chksz = 100000
+    chksz = 10000
     def React_Molecules (self, r1, r2, SM_rxn, showmols):
 
         if showmols == True:
@@ -55,7 +55,7 @@ class Enumerate:
             else:
                 m2 = r2
             reacts = (m1, m2)
-
+        prod_ct = 0
         for r in SM_rxn:
             if r == "product":
                 smi = r1
@@ -65,6 +65,18 @@ class Enumerate:
                 if len(products) == 0:
                     product = None
                 else:
+                    ct = 0
+                    if len(products) > 1:
+
+                        proddict= {}
+
+                        for cx in range (0, len (products)):
+                            if Chem.MolToSmiles(products[cx][0]) not in proddict:
+                                proddict [Chem.MolToSmiles(products[cx][0])] = 1
+                                prod_ct += 1
+                            else:
+                                proddict[Chem.MolToSmiles(products[cx][0])] += 1
+
                     product = products [0][0]
 
                 smi = None
@@ -84,7 +96,7 @@ class Enumerate:
             else:
                 MolDisplay.ShowMols([ r1, r2])
 
-        return smi, len(products)
+        return smi, prod_ct, products
 
     def Show_Reactants (self, reactants):
         for r in reactants:
@@ -201,7 +213,7 @@ class Enumerate:
         else:
             scheme, rxtants = self.ReadRxnScheme(schemefile_jsontext, schemename)
         if scheme is None:
-            return 'NOSCHEMEFAIL'
+            return 'NOSCHEMEFAIL',0, None
         p=in_reactants [0]
         prod_ct = 1
         intermeds = []
@@ -219,14 +231,16 @@ class Enumerate:
             if reaction == 'product':
                 continue
             else:
-                p, outct = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
-                prod_ct *= outct
+                p, outct, products = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
+                if outct > 0:
+                    prod_ct *= outct
             if showmols:
                 print(stepname, p, reactants)
             if p is None:
                 p = 'FAIL'
                 break
             intermeds.append (p)
+
         return p, prod_ct, [scheme, rxtants, intermeds]
 
     def Sample_Library (self, BBlistpath, outfilepath, schemepath, scheme_name,  rndmsample_ct, ShowMols, saltstrip = True, CountOnly=False ):
@@ -459,7 +473,6 @@ class Enumerate:
                     bblist = []
                     for ix in range (0, cycct):
                         ri = random.randint (0, len (cycdict['BB' + str (ix + 1)]))
-                        # bbdf = cycdict['BB' + str (ix + 1)].sample()
                         b = cycdict['BB' + str (ix + 1)].iloc[ri]
                         bb = b['BB_ID']
                         bbs = b['SMILES']
@@ -500,12 +513,10 @@ class Enumerate:
                 rxtnts.append (row['bb' + str (ix + 1) + '_smiles'])
             try:
                 res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+                if prodct > 1:
+                    return 'FAIL--MULTIPLE PRODUCTS'
             except:
-                print('FAIL--Error', rxtnts)
                 return 'FAIL'
-            if res == 'FAIL':
-                print('FAIL in taskfcn')
-                print(rxtnts)
 
             return res
         def processchunk (resdf, df, outpath):
@@ -522,8 +533,10 @@ class Enumerate:
             moddf = moddf.rename(columns={0: 'full_smiles'})
 
             if outpath is not None:
-                moddf[moddf['full_smiles'] != 'FAIL'].to_csv(outpath + '.' + outsuff + '.enum.csv', index=False)
-                moddf[moddf['full_smiles'] == 'FAIL'].to_csv(outpath + '.' + outsuff + '.fail.csv', index=False)
+                enumdf = moddf[~moddf['full_smiles'].isin( ['FAIL','FAIL--MULTIPLE PRODUCTS'])]
+                enumdf.to_csv(outpath + '.' + outsuff + '.enum.csv', mode='a', index=False, header=False)
+                faildf = moddf[moddf['full_smiles'].isin(['FAIL','FAIL--MULTIPLE PRODUCTS'])]
+                faildf.to_csv(outpath + '.' + outsuff + '.fail.csv', mode='a', index=False, header=False)
                 moddf.to_csv(outpath + '.' + outsuff + '.all.csv', mode='a', index=False, header=False)
                 gc.collect()
                 return None
@@ -542,26 +555,33 @@ class Enumerate:
         outsuff = 'full'
         if rndct != -1:
             outsuff = str(rndct)
-        f = open(outpath + '.' + outsuff + '.all.csv', 'w')
-        hdrs.append ('full_smiles')
-        f.write(','.join(hdrs))
-        f.write ('\n')
-        f.close()
+        hdrstr = ','.join (hdrs)
+        flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
+        for fname in flist:
+            f = open(fname, 'w')
+            f.write(hdrstr +',full_smiles')
+            f.write ('\n')
+            f.close()
 
         if type (enum_in) is str:
             reader = pd.read_csv(enum_in, chunksize=self.chksz)
             df = None
+            cct = 0
             for chunk in reader:
                 resdf = pd.DataFrame (chunk, columns = hdrs)
+                print('CHUNK', cct)
                 df = processchunk(resdf, df, outpath)
+                cct += 1
         else:
             df = None
             df = processchunk(enum_in, df, outpath)
 
 
         if outpath is not None:
-            self.Deduplicate (outpath, outsuff)
-            return outpath + '.' + outsuff + '.all.csv'
+            path = outpath + '.' + outsuff + '.all.csv'
+            if removeduplicateproducts:
+                path = self.Deduplicate (outpath, outsuff)
+            return path
         else:
             if removeduplicateproducts:
                 df = df.drop_duplicates(keep='first', subset = ['full_smiles'])
@@ -569,13 +589,11 @@ class Enumerate:
 
     def Deduplicate (self, outpath, outsuff):
         df = pd.read_csv(outpath + '.' + outsuff + '.all.csv')
-        print (df.columns)
         df = df.drop_duplicates(keep='first', subset=['full_smiles'])
         df.to_csv(outpath + '.' + outsuff + '.all.dedup.csv')
+        return outpath + '.' + outsuff + '.all.dedup.csv'
 
     def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False):
-        print ('inpath: ', inpath,  libname,  num_strux)
-        bbspecprefix = ''
         outspecprefix = ''
         if bbspec != '' and bbspec is not None:
             outspecprefix = '/' + outspec
@@ -611,7 +629,6 @@ class Enumerate:
             patterndict[pattern] = Chem.MolFromSmarts(pattern)
 
         for dx in bbdict.keys():
-            print(len(bbdict[dx]))
             removeidxs[dx] = []
             for idx, row in bbdict[dx].iterrows():
                 m = Chem.MolFromSmiles(row['SMILES'])
@@ -620,7 +637,6 @@ class Enumerate:
                         removeidxs[dx].append(idx)
                         continue
             bbdict[dx].drop(removeidxs[dx], axis=0, inplace=True)
-            print(removeidxs[dx], len(removeidxs[dx]), len(removeidxs[dx]), len(bbdict[dx]), len(patterndict.values()))
         return bbdict
 
     def generate_BBlists(self, inpath, outpath, libname, rxnschemefile):
@@ -752,11 +768,18 @@ class Enumerate:
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile, retIntermeds = False):
         enum = Enumerate()
         res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, False)
-
+        if res[1] > 1:
+            if not retIntermeds:
+                return 'FAIL--MULTIPLE PRODUCTS'
+            else:
+                return 'FAIL--MULTIPLE PRODUCTS', None
         if not retIntermeds:
             return res[0]
         else:
-            return res[0], res[2][2]
+            if res [2] is not None:
+                return res[0], res[2][2]
+            else:
+                return res[0], None
 
     def Enumerate_Dummy_Scaffold (self, rxnschemefile, schemename, bbsmiles, rxtntnum):
         scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, FullInfo=True)
@@ -869,7 +892,6 @@ class EnumerationUI():
             ls = st.session_state['schemename']
         else:
             ls = ''
-        print (ls)
 
         f = open(rxnschemefile, 'r')
         schemejson = json.load(f)
@@ -929,6 +951,7 @@ class EnumerationUI():
                 schemename = st.selectbox(label='Scheme', options=schemelist, key= 'schemename', index=lsidx)
                 specstr = st.text_input(key='spec', label='specstr')
 
+
                 if schemename != st.session_state['enumerate_schemename'] or specstr != st.session_state['enumerate_specstr']:
                     addspec = ''
                     if specstr != '' and specstr is not None:
@@ -938,6 +961,13 @@ class EnumerationUI():
                     st.session_state['enumerate_specstr'] = specstr
                     self.SaveToInit()
                     self.SetScheme()
+                else:
+                    if 'enumerate_lastschemedef' not in st.session_state:
+                        st.session_state['enumerate_schemename'] = schemename
+                        st.session_state['enumerate_specstr'] = specstr
+                        self.SetScheme()
+
+
 
 
                 for n in range (0, len(dfs)) :
@@ -1007,16 +1037,21 @@ class EnumerationUI():
                     else:
                         try:
                             res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state ['enumerate_lastschemedef'], True)
-                            if res is None or res == 'FAIL':
-                                st.text ('Reaction Failure')
+                            if res is None or res == 'FAIL' or res.startswith ('FAIL') or res == 'NOSCHEMEFAIL':
+                                st.text ('Reaction Failure: ' + res)
                             else:
-                                st.pyplot(MolDisplay.ShowMol(res))
+                                try:
+                                    st.pyplot(MolDisplay.ShowMol(res))
+                                except Exception as e2:
+                                    st.text ('EXCEPTION:',e2)
                             with st.expander(label='Reaction Info'):
                                 st.pyplot(MolDisplay.ShowMols(rxtnts))
                                 st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
 
                         except Exception as e:
                             st.text ('Error: bad scheme definition')
+                            for r in rxtnts:
+                                st.text (r)
                             exc_type, exc_obj, exc_tb = sys.exc_info()
                             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                             st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
