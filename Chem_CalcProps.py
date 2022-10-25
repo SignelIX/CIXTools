@@ -47,21 +47,27 @@ class Chem_CalcProps:
         df = df.merge(res, left_index=True, right_index=True)
         df.to_csv(outfilename, index=False)
         pbar.unregister()
-        self.GeneratePlots (df, outfilename, ['SlogP', 'TPSA', 'RBs', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW' ])
+        self.GeneratePlots (df, outfilename)
 
-    def GeneratePlots (self, df, infilename, props = ['SlogP', 'TPSA', 'RBs', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW' ]):
+    def GeneratePlots (self, df, infilename, props = {'SlogP':(-1, 10, 12), 'TPSA':(70, 300, 24 ), 'RBs':(0, 15, 16), 'HBD':(0,10, 11), 'HBA':(0, 20, 21), 'HAC':(0, 120, 25), 'SP3':(0, 1, 21), 'ExactMW':(250, 1250,21 ) }):
         if df is None:
             df = pd.read_csv (infilename)
         plotlen = len (props)
         gridwidth = 2
+
         plt.tight_layout ()
+        plt.figure(figsize=(8, 12), dpi=80)
         plt.subplots_adjust(left=0.15, right=.9, top=0.9, bottom=0.1)
-        grid = plt.GridSpec(math.ceil (plotlen/2), gridwidth, wspace=1.2, hspace=2.0)
+        grid = plt.GridSpec(math.ceil (plotlen/gridwidth), gridwidth, wspace=.8, hspace=.8)
 
         ct = 0
-        for p in props:
+        for p in props.keys ():
             subplt = plt.subplot( grid[int(ct/gridwidth), ct % gridwidth])
-            subplt.hist(df[p], edgecolor = 'black', color='red')
+            step = (props[p][1]-props[p][0])/(props[p][2]-1)
+            numsteps = (props[p][1]-props[p][0])/step
+            ticks =  [float(x) for x in range (0, math.ceil(numsteps))]
+            ticks = [step * t + props[p][0]  for t in ticks  ]
+            subplt.hist(df[p], edgecolor = 'black', color='blue', bins = ticks)
             ct += 1
             subplt.set (xlabel=p, ylabel = 'Count')
             plt.title(p + " Histogram")
@@ -153,7 +159,7 @@ class Chem_CalcPropsUI:
                 with st.spinner ('Generating Plots...'):
                     res  = props.GeneratePlots(None, infile )
                     print (res)
-                    st.image (res)
+                    st.image (res, width = 600)
         return
 
     def SaveToInit(self):

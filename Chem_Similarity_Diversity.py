@@ -17,6 +17,7 @@ import operator
 import math
 import streamlit as st
 import json
+import copy
 
 
 class Diversity:
@@ -346,7 +347,6 @@ class Diversity:
 
         fplist = []
         fpvecs = []
-        print (len (cmpdlist))
         dupct = 0
         for smi in cmpdlist:
             arr, fp = get_numpy_fp(smi)
@@ -509,6 +509,9 @@ class Diversity:
         dfmode = False
         if (type(inlist) == pd.DataFrame):
             inseries = inlist
+            if 'SMILES' not in inseries.columns:
+                print ('FAIL: No SMILES column')
+                return None
             dfmode = True
         else:
             if (type(inlist[0]) == str):
@@ -535,7 +538,6 @@ class Diversity:
         for f in res:
             fplist.append(f)
         return fplist
-
     def compfps_dask(self, fplist, compfplist, showprog=True):
         def comptaskfcn(row, compfplist):
             try:
@@ -560,26 +562,11 @@ class Diversity:
             res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute()
         if showprog:
             pbar.unregister()
+
         return list(res)
 
-    @staticmethod
-    def Run_SimilarityComp ( smiles, filename ):
-        div = Diversity ()
-        if type (smiles) == str:
-            smileslist = [smiles]
-
-        smilesfps = div.generatefps_dask(smileslist, showprog=False)
-        filedf = pd.read_csv(filename)
-        filefps = div.generatefps_dask(filedf, showprog=False)
-
-        res = div.compfps_dask(filefps, smilesfps)
-        resdf = pd.DataFrame (res, columns = smileslist)
-        filedf = pd.concat([filedf,  resdf], axis=1)
-        print (filedf)
-        filedf.to_csv (filename.replace ('.csv', '') + '.simrun.csv')
-
-
 class Similarity:
+    chksz = 1000000
     enum = Enumerate.Enumerate ()
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1):
         print (bbsmiles)
@@ -610,6 +597,56 @@ class Similarity:
             tnm_score = -1
 
         return tnm_score
+
+    def SimSearchLargeFile (self, smileslist, catfile, outpath, sep):
+        def processchunk (smileslist, df, outpath, smilesfps):
+            searchdf, smilesfps = self.Run_SimilarityComp(smileslist, df, outpath, wmode, smilesfps)
+            return searchdf, smilesfps
+        reader = pd.read_csv(catfile, chunksize=self.chksz, sep=sep)
+        cct = 0
+        wmode = 'w'
+        smilesfps = None
+        for chunk in reader:
+            resdf = copy.deepcopy (pd.DataFrame(chunk))
+            resdf = resdf.reset_index()
+            if 'smiles' in resdf.columns:
+                resdf = resdf.rename (columns = {'smiles':'SMILES'})
+
+            print('CHUNK', cct)
+
+            df, smilesfps = processchunk(smileslist, resdf, outpath, smilesfps)
+
+            wmode = 'a'
+            cct += 1
+        return
+
+    def Run_SimilarityComp(self, smileslist, searchstrux, outpath, wmode, smilesfps):
+        div = Diversity()
+        if type(smileslist) == str:
+            smileslist = [smileslist]
+
+        if type(searchstrux) == str:
+            searchdf = pd.read_csv(searchstrux)
+        else:
+            searchdf = searchstrux
+        if 'SMILES' not in searchdf.columns:
+            return None, None
+        if smilesfps is None:
+            smilesfps = div.generatefps_dask(smileslist, showprog=False)
+        searchfps = div.generatefps_dask(searchdf, showprog=False)
+        res = div.compfps_dask( smilesfps, searchfps )
+        coldict = {}
+        for s in range (0,len(smileslist)):
+            coldict [s] ='query' + str(s)
+        resdf = pd.DataFrame(res).transpose ()
+        resdf= resdf.rename (columns = coldict)
+        searchdf = pd.concat([searchdf, resdf], axis=1)
+        if wmode == 'a':
+            writehdrs = False
+        else:
+            writehdrs = True
+        searchdf.to_csv(outpath, mode=wmode, index=False, header=writehdrs)
+        return searchdf, smilesfps
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
         id = splitstr[1]
@@ -653,14 +690,12 @@ class Similarity:
     def Run_SimList(self, probefile, catfile, outfile):
         N = 10000
         ct = 0
-        writect = 1
 
         hdrread = False
         probefps = []
         probesmiles = []
         with open() as probes:
             for mlist in iter(lambda: list(islice(probes, N)), []):
-                print(len(mlist))
                 for r in mlist:
                     if hdrread == True:
                         splitstr = r.split(',')
@@ -676,7 +711,7 @@ class Similarity:
         probes.close()
 
         hdrread = False
-        pool_size = 8
+        pool_size = 16
         lct = 0
         simct = 0
         cutoff = .77
@@ -688,8 +723,7 @@ class Similarity:
                 block = ''
                 for line in mlist:
                     if hdrread == True:
-                        hassim = pool.apply_async(self.CompareMolecule,
-                                                  args=(line, lct, cutoff, probefps, probesmiles, outfile)).get()
+                        hassim = pool.apply_async(self.CompareMolecule,args=(line, lct, cutoff, probefps, probesmiles, outfile)).get()
                         if hassim == True:
                             simct += 1
                     else:
@@ -700,9 +734,7 @@ class Similarity:
                 pool.close()
                 pool.join()
                 ct = ct + 1
-                print(ct * N)
-                print(simct)
-            print('joined')
+
         collection.close()
         outfile.close()
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
@@ -753,9 +785,7 @@ class Similarity:
                 pool.close()
                 pool.join()
                 ct = ct + 1
-                print(ct * N)
-                print(subct)
-            print('joined')
+
         collection.close()
         outfile.close()
     def FindClosestList_SimMatch (self, testlist, complists):
@@ -780,6 +810,7 @@ class Similarity:
 class Chem_Similarity_DiversityUI:
     initpath = '../CIxTools.init.json'
     paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles']
+    sim = Similarity ()
 
     def __init__ (self):
         f = open(self.initpath)
@@ -793,12 +824,18 @@ class Chem_Similarity_DiversityUI:
                     st.session_state[p] = ''
     def body (self):
         st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
-            Umap Chemspace Visualization</h1>""", unsafe_allow_html=True)
+            Similarity Search</h1>""", unsafe_allow_html=True)
         inputfile = st.text_input (label = 'input file', key = 'simdiv_inputfile', on_change=self.SaveToInit)
         smiles = st.text_input (label = 'input smiles', key = 'simdiv_inputsmiles', on_change=self.SaveToInit)
+        sep = st.selectbox (label= 'Delimiter' , options= ['COMMA', 'TAB'], index = 0)
         if st.button (label = 'Run Similarity (smiles v. file)'):
             with st.spinner('Running Similarity'):
-                Diversity.Run_SimilarityComp ( smiles, inputfile)
+                outpath = inputfile.replace('.csv', '') + '.simrun.csv'
+                if sep == 'TAB':
+                    sep = '\t'
+                else:
+                    sep  =','
+                self.sim.SimSearchLargeFile([smiles], inputfile, outpath, sep= sep)
 
     def SaveToInit(self):
 
