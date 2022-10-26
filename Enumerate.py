@@ -31,6 +31,7 @@ import copy
 class Enumerate:
     rxndict = {}
     chksz = 10000
+    named_reactions = None
     def React_Molecules (self, r1, r2, SM_rxn, showmols):
 
         if showmols == True:
@@ -79,8 +80,6 @@ class Enumerate:
 
                     product = products [0][0]
 
-                smi = None
-
                 try:
                     if product is  None:
                         smi = None
@@ -103,7 +102,7 @@ class Enumerate:
             MolDisplay.ShowMol (r)
 
     def ReadRxnScheme (self, fname_json, schemename, verbose = True, FullInfo = False):
-        try:
+        try: #case fname_json is json
             data = {}
             data[schemename] = json.loads(fname_json)
         except Exception as e:
@@ -231,6 +230,16 @@ class Enumerate:
             if reaction == 'product':
                 continue
             else:
+                if self.named_reactions is not None:
+                    rlist = []
+                    if type (reaction) == str:
+                        reaction = [reaction]
+                    for r in reaction:
+                        if r in self.named_reactions:
+                            rlist.extend (self.named_reactions [r])
+                        else:
+                            rlist.append (r)
+                    reaction = rlist
                 p, outct, products = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
                 if outct > 0:
                     prod_ct *= outct
@@ -322,7 +331,7 @@ class Enumerate:
         df = pd.read_csv (BBlistpath)
         df = df.fillna(0)
 
-        scheme, reactants = self.ReadRxnScheme(schemepath, scheme_name)
+        scheme, reactants= self.ReadRxnScheme(schemepath, scheme_name)
         if reactants is None:
             cycles = df.Cycle.unique ()
             cycles.sort ()
@@ -766,8 +775,7 @@ class Enumerate:
         return full_df
 
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile, retIntermeds = False):
-        enum = Enumerate()
-        res = enum.RunRxnScheme(rxtnts, rxnschemefile, schemename, False)
+        res = self.RunRxnScheme(rxtnts, rxnschemefile, schemename, False)
         if res[1] > 1:
             if not retIntermeds:
                 return 'FAIL--MULTIPLE PRODUCTS'
@@ -807,6 +815,8 @@ class EnumerationUI():
             if p not in st.session_state or st.session_state[p] == None or st.session_state [p] == '' :
                 if p in initjson:
                     st.session_state[p] = initjson [p]
+                    if p == 'enumerate_rxnscheme':
+                        self.enum.named_reactions = self.enum.ReadRxnScheme(st.session_state['enumerate_rxnscheme'],'Named_Reactions', FullInfo=True)[0]
                 else:
                     st.session_state[p] = ''
 
@@ -875,13 +885,20 @@ class EnumerationUI():
         with open(self.initpath, "w") as jsonFile:
             jsonFile.write(json.dumps(data, indent=4))
 
+    def Init_RxnSchemeFile (self):
+        self.enum.named_reactions= self.enum.ReadRxnScheme(st.session_state ['enumerate_rxnscheme'], 'Named_Reactions', FullInfo = True )[0]
+        self.SaveToInit ()
+
     def body(self):
         smilescol='SMILES'
 
         if 'enumerate_specstr' not in st.session_state:
             st.session_state['enumerate_specstr'] = 'Empty'
 
-        rxnschemefile = st.text_input(  label='Rxn Scheme File', on_change=self.SaveToInit, key='enumerate_rxnscheme')
+        rxnschemefile = st.text_input(  label='Rxn Scheme File', on_change=self.Init_RxnSchemeFile, key='enumerate_rxnscheme')
+        rxnschemerefresh = st.button (label = 'Re-initialize to Rxn Scheme File')
+        if rxnschemerefresh == True:
+            self.Init_RxnSchemeFile()
         if os.path.exists(rxnschemefile) == False:
             st.text (rxnschemefile + ' does not exist. Please adjust path')
             return
@@ -967,9 +984,21 @@ class EnumerationUI():
                         st.session_state['enumerate_specstr'] = specstr
                         self.SetScheme()
 
+        with cont2:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button('random'):
+                    for dx in range(0, len(dfs)):
+                        if dfs[dx] is not None:
+                            st.session_state['bb' + str(dx) + 'idx'] = dfs[dx].index[
+                                random.randint(0, len(dfs[dx]))]
+                    Enumerate = True
+            with col2:
+                if st.button('enumerate'):
+                    Enumerate = True
 
-
-
+        with cont3:
+            with colx1:
                 for n in range (0, len(dfs)) :
                     if 'bb' + str(n) + 'idx' not in st.session_state:
                         st.session_state['bb' + str(n) + 'idx'] = 0
@@ -1016,17 +1045,7 @@ class EnumerationUI():
                             addspec = '/' + specstr
                         self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
 
-        with cont2:
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                if st.button('random'):
-                    for dx in range(0, len(dfs)):
-                        if dfs[dx] is not None:
-                            st.session_state['bb' + str(dx) + 'idx'] = dfs[dx].index[random.randint(0, len(dfs[dx]))]
-                    Enumerate = True
-            with col2:
-                if st.button('enumerate'):
-                    Enumerate = True
+
 
 
         with cont3:
