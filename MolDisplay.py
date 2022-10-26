@@ -36,17 +36,18 @@ def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
                     list.append(m)
                 else:
                     list.append (smi)
-            img = Draw.MolsToGridImage(list, molsPerRow=cols, subImgSize=subImgSize )
 
-            if outtype == 'bytesio':
-                buf = io.BytesIO()
-                img.save(buf, format='png')
-                buf.seek(0)
-                return buf.read()
-            else:
-                img.save('test_mols.png')
-                plt.imshow(img)
-                plt.show()
-                return plt
+        img = Draw.MolsToGridImage(list, molsPerRow=cols, subImgSize=subImgSize )
+
+        if outtype == 'bytesio':
+            buf = io.BytesIO()
+            img.save(buf, format='png')
+            buf.seek(0)
+            return buf.read()
+        else:
+            img.save('test_mols.png')
+            plt.imshow(img)
+            plt.show()
+            return plt
     else:
         return None
