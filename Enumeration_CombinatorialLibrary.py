@@ -34,7 +34,7 @@ def EnumTuples_dask (rxnschemefile, libname, tuples, bbdict, cycs, tupleinfodict
         tupleinfodict[str(row)] = res
         return res, row
 
-    NUM_WORKERS = 16
+
     tuple_series = pd.Series(tuples)
     ddf = dd.from_pandas(tuple_series, npartitions=NUM_WORKERS)
     if showprog:

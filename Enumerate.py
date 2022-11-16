@@ -9,8 +9,11 @@ import time
 import threading
 import MolDisplay
 import ChemUtilities
+import dask
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
+from dask.diagnostics import ResourceProfiler
+
 import os
 from rdkit.Chem import SaltRemover
 import pathlib
@@ -29,10 +32,12 @@ import copy
 import argparse
 import yaml
 
+NUM_WORKERS = 16
+chksz = 50000
 
 class Enumerate:
     rxndict = {}
-    chksz = 10000
+
     named_reactions = None
     def React_Molecules (self, r1, r2, SM_rxn, showmols):
 
@@ -381,14 +386,13 @@ class Enumerate:
             block = ''
             self.enumct = 0
             CE = CompleteEnum (outfile)
-            pool_size = 1
+            pool_size = NUM_WORKERS
             pool = Pool(pool_size)
             for r in range (0, rndmsample_ct):
                 pool.apply_async(EnumFullMolecule, args=(cycles, cycvals, r_list), callback=CE.CompleteEnumAsync)
             pool.close ()
             pool.join ()
             CE.WriteBlock()
-
 
         outfile.close ()
 
@@ -419,7 +423,10 @@ class Enumerate:
             df.to_csv (dp_outfile)
 
     def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False):
-        def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct):
+        def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
+            if reslist is None:
+                reslist = [[]] * min(chksz, fullct)
+                print ('RESLIST', len(reslist))
 
             for i, b in bdfs[level].iterrows():
                 bb = b['BB_ID']
@@ -432,14 +439,27 @@ class Enumerate:
                 bblevellist.append(bbs)
 
                 if level < cycct - 1:
-                    ct, reslist = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct)
+                    ct, reslist, currct, appendmode = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct, hdrs, currct = currct, appendmode=appendmode)
                 else:
-                    reslist.append(bblevellist)
-                    ct += 1
-                    if ct % 10000 == 0:
-                        print('RECURS CT', ct, '/', fullct, end='\r')
 
-            return ct,  reslist
+                    reslist[currct] = bblevellist
+
+                    ct += 1
+                    currct += 1
+                    if ct % chksz == 0:
+                        print('RECURS CT', ct, '/', fullct, ' currct:', currct, end='\r')
+
+                    if currct == chksz or ct == fullct:
+                        enum_in = pd.DataFrame (reslist, columns=hdrs)
+                        self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
+                                                    removeduplicateproducts, appendmode=appendmode)
+                        reslist = [[]] * min(chksz, fullct - ct)
+                        currct = 0
+                        appendmode = True
+                        gc.collect ()
+
+
+            return ct, reslist,  currct, appendmode
 
         if SMILEScolnames is None:
             SMILEScolnames = []
@@ -449,10 +469,6 @@ class Enumerate:
         cycct = len (infilelist)
 
         if type(infilelist) is list:
-            cycdict = {}
-            ct = 1
-
-            print (infilelist)
             cycdict = self.load_BBlists(infilelist, BBIDcolnames, SMILEScolnames)
 
             bdfs = [None] * cycct
@@ -472,12 +488,28 @@ class Enumerate:
             print('molecules to enumerate:', rndct)
             if rndct > fullct:
                 rndct = -1
-            if int (rndct) == -1:
-                reslist= []
-                ct ,  reslist = rec_bbpull (bdfs, 0, cycct, [], 0, reslist, fullct)
+
+            hdrs = []
+            for ix in range(0, cycct):
+                hdrs.append('bb' + str(ix + 1))
+                hdrs.append('bb' + str(ix + 1) + '_smiles')
+
+            appendmode = False
+
+            if rndct == -1 :
+                hdrs = []
+                for ix in range(0, cycct):
+                    hdrs.append('bb' + str(ix + 1))
+                    hdrs.append('bb' + str(ix + 1) + '_smiles')
+                with open(outpath + ".EnumList.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(hdrs)
+                rec_bbpull (bdfs, 0, cycct, [], 0, None, fullct, hdrs, appendmode = appendmode)
             else:
-                reslist = [[]] * rndct
+                reslist = [[]] * min(rndct, chksz)
                 ct = 0
+                currct = 0
+
 
                 while ct < rndct:
                     bblist = []
@@ -489,39 +521,50 @@ class Enumerate:
                         bblist.append (bb)
                         bblist.append (bbs)
                     if bblist not in reslist:
-                        reslist[ct] = bblist
+                        reslist[currct] = bblist
                         ct += 1
+                        currct += 1
                         if ct % 1000 == 0:
                             print(ct, '/', fullct, end='\r')
-            hdrs = []
-            for ix in range(0, cycct):
-                hdrs.append ('bb' + str (ix + 1))
-                hdrs.append('bb' + str(ix + 1) + '_smiles')
+                        if currct ==  chksz  or ct == rndct:
+                            enum_in = pd.DataFrame(reslist, columns=hdrs)
 
-            if len (reslist) >  self.chksz:
-                with open(outpath + ".EnumList.csv", "w") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(hdrs, )
-                    writer.writerows(reslist)
-
-                enum_in = outpath + ".EnumList.csv"
-            else:
-                enum_in  = pd.DataFrame (reslist, columns= hdrs)
+                            self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode)
+                            reslist = [[]] * min (chksz, rndct - ct)
+                            currct = 0
+                            appendmode = True
 
         else:
             resdf = infilelist
             enum_in = resdf
             hdrs = None
+            self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
+                                        removeduplicateproducts, appendmode = False)
 
-        gc.collect ()
-        self.DoParallel_Enumeration (enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts)
         return outpath
 
-    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False):
+    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False):
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
+
+            reslist = []
+            for r in range (0, len(row)):
+                rxtnts = []
+                for ix in range (0, cycct):
+                    rxtnts.append (row.iloc[r]['bb' + str (ix + 1) + '_smiles'])
+                try:
+                    res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+                    if prodct > 1:
+                        reslist.append ( 'FAIL--MULTIPLE PRODUCTS')
+                    else:
+                        reslist.append (res)
+                except:
+                    reslist.append ( 'FAIL')
+            return reslist
+
+        def oldtaskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
             rxtnts = []
-            for ix in range (0, cycct):
-                rxtnts.append (row['bb' + str (ix + 1) + '_smiles'])
+            for ix in range(0, cycct):
+                rxtnts.append(row['bb' + str(ix + 1) + '_smiles'])
             try:
                 res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
                 if prodct > 1:
@@ -531,13 +574,15 @@ class Enumerate:
 
             return res
         def processchunk (resdf, df, outpath):
+
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=NUM_WORKERS)
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
-            res = ddf.apply(taskfcn, axis=1, result_type='expand',
+
+            res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
                             args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
-                            meta=(0, str)).compute()
+                            meta=(0, str)).compute(scheduler='processes')
             pbar.unregister()
 
             moddf = resdf.merge(res, left_index=True, right_index=True)
@@ -558,9 +603,7 @@ class Enumerate:
                     df.append(moddf, ignore_index=True)
                 gc.collect()
                 return df
-
-        print('starting enumeration')
-        NUM_WORKERS = 16
+        print('\nstarting enumeration')
 
         df  = None
         outsuff = 'full'
@@ -568,14 +611,15 @@ class Enumerate:
             outsuff = str(rndct)
         hdrstr = ','.join (hdrs)
         flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
-        for fname in flist:
-            f = open(fname, 'w')
-            f.write(hdrstr +',full_smiles')
-            f.write ('\n')
-            f.close()
+        if appendmode == False:
+            for fname in flist:
+                f = open(fname, 'w')
+                f.write(hdrstr +',full_smiles')
+                f.write ('\n')
+                f.close()
 
         if type (enum_in) is str:
-            reader = pd.read_csv(enum_in, chunksize=self.chksz)
+            reader = pd.read_csv(enum_in, chunksize=chksz)
             df = None
             cct = 0
             for chunk in reader:

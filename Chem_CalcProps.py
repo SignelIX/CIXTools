@@ -1,5 +1,6 @@
 import pandas as pd
 from rdkit import  Chem
+from rdkit.Chem import Descriptors
 import rdkit.Chem.rdMolDescriptors as rdMolDescriptors
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
@@ -7,6 +8,8 @@ import streamlit as st
 import json
 import matplotlib.pyplot as plt
 import math
+
+NUM_WORKERS = 16
 
 class Chem_CalcProps:
     def addPropsToFile (self, infile, outfilename,  smiles_col = 'SMILES', bbidcols = ['bb1', 'bb2','bb3']):
@@ -37,7 +40,7 @@ class Chem_CalcProps:
             return res
 
         df = pd.read_csv(infile)
-        NUM_WORKERS = 16
+
         ddf = dd.from_pandas(df, npartitions=NUM_WORKERS)
         pbar = ProgressBar()
         pbar.register()
