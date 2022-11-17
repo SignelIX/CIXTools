@@ -577,7 +577,7 @@ class Enumerate:
 
             pbar = ProgressBar()
             pbar.register()
-            ddf = dd.from_pandas(resdf, npartitions=1200)
+            ddf = dd.from_pandas(resdf, npartitions=120)
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
             res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
