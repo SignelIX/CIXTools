@@ -582,7 +582,7 @@ class Enumerate:
 
             res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
                             args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
-                            meta=(0, str)).compute(scheduler='processes',  num_workers=48)
+                            meta=(0, str)).compute(scheduler='processes',  num_workers=120)
             pbar.unregister()
 
             moddf = resdf.merge(res, left_index=True, right_index=True)
