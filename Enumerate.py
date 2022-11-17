@@ -663,7 +663,7 @@ class Enumerate:
                 infilelist.append (c)
         infilelist.sort ()
         if len(infilelist) == 0:
-            print ('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv')
+            print ('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath)
             return ''
 
         if rxschemefile is None:
