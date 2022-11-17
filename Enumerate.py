@@ -33,7 +33,7 @@ import argparse
 import yaml
 
 NUM_WORKERS = 16
-chksz = 200000
+chksz = 500000
 
 class Enumerate:
     rxndict = {}
@@ -577,7 +577,7 @@ class Enumerate:
 
             pbar = ProgressBar()
             pbar.register()
-            ddf = dd.from_pandas(resdf, npartitions=120)
+            ddf = dd.from_pandas(resdf, npartitions=1200)
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
             res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
