@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import io
 import numpy as np
 from PIL import Image
-
+import base64
 
 def ShowMol( smiles):
     if smiles is not None:
@@ -44,10 +44,18 @@ def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
             img.save(buf, format='png')
             buf.seek(0)
             return buf.read()
+        elif outtype == 'b64_datauri':
+            buf = io.BytesIO()
+            img.save(buf, format='png')
+            buf.seek(0)
+            data = buf.read()
+            sb = ''
+            sb += "data:image/png;base64,"
+            sb += base64.b64encode(data).decode('ascii')
+            return sb
         else:
             img.save('test_mols.png')
             plt.imshow(img)
-            plt.show()
             return plt
     else:
         return None

@@ -13,7 +13,7 @@ import dask
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 from dask.diagnostics import ResourceProfiler
-
+import plotly.express as px
 import os
 from rdkit.Chem import SaltRemover
 import pathlib
@@ -31,9 +31,16 @@ import time
 import copy
 import argparse
 import yaml
+import plotly.graph_objects as go
+from st_aggrid import AgGrid
+from st_aggrid.grid_options_builder import  GridOptionsBuilder
+from st_aggrid import GridUpdateMode, DataReturnMode
+import numexpr
 
-NUM_WORKERS = 16
-chksz = 500000
+CPU_COUNT = os.cpu_count()
+NUM_WORKERS = CPU_COUNT * 2
+chksz = 50000
+numexpr.set_num_threads(numexpr.detect_number_of_cores())
 
 class Enumerate:
     rxndict = {}
@@ -422,7 +429,7 @@ class Enumerate:
             df =  df.append (dp_list)
             df.to_csv (dp_outfile)
 
-    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False):
+    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath'):
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
@@ -529,7 +536,7 @@ class Enumerate:
                         if currct ==  chksz  or ct == rndct:
                             enum_in = pd.DataFrame(reslist, columns=hdrs)
 
-                            self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode)
+                            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode)
                             reslist = [[]] * min (chksz, rndct - ct)
                             currct = 0
                             appendmode = True
@@ -538,7 +545,7 @@ class Enumerate:
             resdf = infilelist
             enum_in = resdf
             hdrs = None
-            self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
+            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
                                         removeduplicateproducts, appendmode = False)
 
         return outpath
@@ -577,12 +584,12 @@ class Enumerate:
 
             pbar = ProgressBar()
             pbar.register()
-            ddf = dd.from_pandas(resdf, npartitions=1200)
+            ddf = dd.from_pandas(resdf, npartitions=CPU_COUNT * 10)
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
             res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
                             args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
-                            meta=(0, str)).compute(scheduler='processes',  num_workers=256)
+                            meta=(0, str)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
             pbar.unregister()
 
             moddf = resdf.merge(res, left_index=True, right_index=True)
@@ -610,13 +617,14 @@ class Enumerate:
         if rndct != -1:
             outsuff = str(rndct)
         hdrstr = ','.join (hdrs)
-        flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
-        if appendmode == False:
-            for fname in flist:
-                f = open(fname, 'w')
-                f.write(hdrstr +',full_smiles')
-                f.write ('\n')
-                f.close()
+        if outpath is not None:
+            flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
+            if appendmode == False:
+                for fname in flist:
+                    f = open(fname, 'w')
+                    f.write(hdrstr +',full_smiles')
+                    f.write ('\n')
+                    f.close()
 
         if type (enum_in) is str:
             reader = pd.read_csv(enum_in, chunksize=chksz)
@@ -648,7 +656,7 @@ class Enumerate:
         df.to_csv(outpath + '.' + outsuff + '.all.dedup.csv')
         return outpath + '.' + outsuff + '.all.dedup.csv'
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False):
+    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False):
         outspecprefix = ''
         if bbspec != '' and bbspec is not None:
             outspecprefix = '/' + outspec
@@ -677,6 +685,8 @@ class Enumerate:
         if  outspec != '' and outspec is not None:
             outpath += '.' + outspec
 
+        if returndf is True:
+            outpath = None
         outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups)
         return outfile
 
@@ -987,6 +997,8 @@ class EnumerationUI:
             cont1 = st.container ()
         cont2 = st.container()
         cont3= st.container ()
+        cont4 = st.container ()
+        cont5 = st.container()
 
 
         Enumerate = False
@@ -1027,6 +1039,7 @@ class EnumerationUI:
                     dfs  = self.UpdateBBDfs( st.session_state['enumerate_lastschemepath'] + schemename + addspec +'/BBLists', True)
                     st.session_state['enumerate_schemename'] = schemename
                     st.session_state['enumerate_specstr'] = specstr
+                    st.session_state['aggriddata'] = None
                     self.SaveToInit()
                     self.SetScheme()
                 else:
@@ -1048,11 +1061,49 @@ class EnumerationUI:
                 if st.button('enumerate'):
                     Enumerate = True
 
+        for n in range(0, len(dfs)):
+            if 'bb' + str(n) + 'idx' not in st.session_state:
+                st.session_state['bb' + str(n) + 'idx'] = 0
+            if 'bb' + str(n) + 'txt' not in st.session_state:
+                st.session_state['bb' + str(n) + 'txt'] = ''
+        with cont5:
+            with st.expander(label='Test structure grid', expanded=True):
+                getr100 = st.button(label='get random 100')
+                if getr100:
+                    addspec = ''
+                    if specstr != '' and specstr is not None:
+                        addspec = '/' + specstr
+                    with st.spinner('Enumerating'):
+                        resdf = self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec,
+                                                          100, rxnschemefile,
+                                                          SMILEScolnames=self.smiles_colnames,
+                                                          BBcolnames=self.bbid_colnames,
+                                                          rem_dups=False, returndf=True)
+
+                        cols =  ['full_smiles']
+                        for c in resdf.columns [0:len(resdf.columns) -1]:
+                            cols.append (c)
+                        resdf = resdf.loc [:, cols]
+                        st.session_state['aggriddata'] = resdf
+
+                if 'aggriddata' in  st.session_state and st.session_state ['aggriddata'] is not None:
+                    gb = GridOptionsBuilder.from_dataframe(st.session_state['aggriddata'])
+
+                    gb.configure_selection('single')
+                    gridOptions = gb.build()
+                    selected = AgGrid(st.session_state['aggriddata'], height=250, update_mode='SELECTION_CHANGED',
+                                              gridOptions= gridOptions,  data_return_mode=DataReturnMode.AS_INPUT, reload_data=True)
+                    if len(selected['selected_rows']) > 0:
+                        for n in range(0, len(dfs) ):
+                            st.session_state['bb' + str(n) + 'txt'] = selected['selected_rows'][0]['bb' + str (n+1) + '_smiles' ]
+                        Enumerate = True
+
+
+
+
         with cont3:
             with colx1:
-                for n in range (0, len(dfs)) :
-                    if 'bb' + str(n) + 'idx' not in st.session_state:
-                        st.session_state['bb' + str(n) + 'idx'] = 0
+
 
                 rxtnts = [None] * len(dfs)
                 for n in range (0, len(dfs)) :
@@ -1097,8 +1148,9 @@ class EnumerationUI:
                         print (schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile)
                         self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
 
-        with cont3:
-            if Enumerate == True:
+
+        if Enumerate == True:
+            with cont3:
                 with colx2:
                     if rxtnts is None or len(rxtnts) == 0:
                         st.text('Reactants not correctly loaded')
@@ -1112,9 +1164,7 @@ class EnumerationUI:
                                     st.pyplot(MolDisplay.ShowMol(res))
                                 except Exception as e2:
                                     st.text ('EXCEPTION:',e2)
-                            with st.expander(label='Reaction Info'):
-                                st.pyplot(MolDisplay.ShowMols(rxtnts))
-                                st.pyplot(MolDisplay.ShowMols(intermeds, cols=2, subImgSize=(400,400)))
+
 
                         except Exception as e:
                             st.text ('Error: bad scheme definition')
@@ -1124,10 +1174,21 @@ class EnumerationUI:
                             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                             st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
                             st.text (e)
+            with cont4:
+                coly1, coly2 = st.columns (2)
+                with coly1:
+                    with st.expander(label='Reagents'):
+                        st.image(MolDisplay.ShowMols(rxtnts, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
+                with coly2:
+                    with st.expander(label='Reaction Products'):
+                        st.image(MolDisplay.ShowMols(intermeds, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
+
 
     def RunUI(self):
         self.head()
         self.body()
+
+
 
 class EnumerationCLI :
     @staticmethod
