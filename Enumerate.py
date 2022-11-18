@@ -41,6 +41,8 @@ CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
 chksz = 50000
 numexpr.set_num_threads(numexpr.detect_number_of_cores())
+if "NUMEXPR_MAX_THREADS" not in os.environ:
+    os.environ["NUMEXPR_MAX_THREADS"] = '16'
 
 class Enumerate:
     rxndict = {}
