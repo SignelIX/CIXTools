@@ -69,34 +69,49 @@ class Chem_SpaceVisualization:
         out_csv_file = outpath + outprefix + '.csv'
         df = None
         legendlabels = {}
+        colorlist = []
         clrct = 0
         for infile in infilelist:
             if df is None:
                 df = pd.read_csv(infile, sep=',')
+                colorlist.extend([self.clrs[clrct]] * len(df))
             else:
-                df = df.append ( pd.read_csv(infile, sep=','))
+                tempdf = pd.read_csv(infile, sep=',')
+                colorlist.extend([self.clrs[clrct]] * len(tempdf))
+                df = df.append ( tempdf)
+
             legendlabels[pathlib.Path (infile).name] = self.clrs[clrct]
+
             clrct +=1
 
 
         df = NamingStandardizer.Standardize_Colnames(df, 'SMILES')
+        df ['color'] = colorlist
         if df is not None:
             df = df.sample(frac=frac)
-        plotlyfig = self.Generate_UMAP(list(df['SMILES']), None, fig_fname=out_img_file, outfname=out_csv_file,
-                          modeloutfile=out_pkl_file, transformcolorlist=None, legendlabels=legendlabels)
+        with st.spinner('generating UMAP...'):
+            plotlyfig = self.Generate_UMAP(list(df['SMILES']), None, fig_fname=out_img_file, outfname=out_csv_file,
+                              modeloutfile=out_pkl_file, fit_colorlist=df['color'], legendlabels=legendlabels)
         return out_pkl_file, out_img_file, out_csv_file, plotlyfig
 
     def Generate_UMAP (self, fit_cmpdlist, transform_cmpdlist, fig_fname, outfname, modelfile = None,
-                       transformcolorlist = None, modeloutfile=None, legendlabels = None, underlyingmaplist=None ):
+                       transformcolorlist = None, fit_colorlist = None, modeloutfile=None, legendlabels = None, underlyingmaplist=None ):
+
         if outfname is not None:
+            print(outfname)
             outf = open(outfname, 'w')
             outf.write ('SMILES,x,y,color\n')
 
         colorlist = []
         alphalist = []
         sizelist = []
+
         if fit_cmpdlist is not None:
-            colorlist = ['gray']*(len(fit_cmpdlist))
+            if fit_colorlist is not None:
+                print (len(fit_colorlist), len (fit_cmpdlist))
+                colorlist.extend (fit_colorlist)
+            else:
+                colorlist = ['gray']*(len(fit_cmpdlist))
             alphalist = [1.0]  *(len(fit_cmpdlist))
             sizelist = [4.0]*(len(fit_cmpdlist))
         if underlyingmaplist is not None:
@@ -147,7 +162,9 @@ class Chem_SpaceVisualization:
                           low_memory = False,
                           min_dist = 0.001,
                           verbose = True)
+            print('calculation complete. Fitting...')
             u = fit.fit_transform(fitdata)
+            print('umap fitting complete')
         else:
             f = open (modelfile, 'rb')
             fit = pickle.load (f)
@@ -160,11 +177,9 @@ class Chem_SpaceVisualization:
 
         if outfname is not None:
             for i in range (0, len (all_cmpds_list)):
-                if transformcolorlist is None:
-                    outf.write (','.join (str (a) for a in [all_cmpds_list[i], u[i,0], u[i,1], '\n']))
-                else:
-                    outf.write(','.join(str(a) for a in [all_cmpds_list[i], u[i, 0], u[i, 1], colorlist [i], '\n']))
+                outf.write(','.join(str(a) for a in [all_cmpds_list[i], u[i, 0], u[i, 1], colorlist [i], '\n']))
             outf.close ()
+
 
         fitdata = []
         um_pts = []
@@ -173,17 +188,13 @@ class Chem_SpaceVisualization:
             for uix in underlyingmaplist:
                 um_pts.append ([uix[0],uix[1]])
 
-        if u is None:
-            u = np.array(um_pts)
-        else:
-            u = np.append( np.array(um_pts), u,0)
+            if u is None:
+                u = np.array(um_pts)
+            else:
+                u = np.append( np.array(um_pts), u,0)
 
         plt.scatter(u[:, 0], u[:, 1], color = colorlist, marker='o', s=sizelist, alpha= alphalist,  edgecolors='k', linewidths=0.2)
 
-        nbins = 100
-        # plt.hexbin(u[:, 0], u[:, 1], gridsize=nbins, cmap=plt.cm.BuGn_r, alpha=1.0)
-        # plt.scatter(u[:, 0], u[:, 1], color='r', marker='o', s=4, alpha=1.0, edgecolors='k', linewidths=0.2)
-        #pltlyfig = px.scatter(x= u[:, 0], y =u[:, 1], color=colorlist, )
         pltlyfig = None
 
         if transform_cmpdlist is not None:
@@ -192,6 +203,7 @@ class Chem_SpaceVisualization:
             len_transform = 'N/A'
         plt.title('UMAP embedding of Diverse Set: fit points:' +  str(len(fitdata)) + ' diversity points:' +  len_transform )
         patches = []
+
         if legendlabels is not None:
             for cx in legendlabels.keys():
                 print ('LABELS:', cx)
@@ -209,7 +221,7 @@ class Chem_SpaceVisualization:
         if modeloutfile is not None:
             print('writing model')
             pickle.dump(fit, open(modeloutfile, 'wb'))
-            f = open(modeloutfile.replace('.pkl', '.csv'), 'w')
+            f = open(modeloutfile.replace('.pkl', '.mdl.csv'), 'w')
             for ux in u:
                 f.write(str(ux[0]) + ',' + str(ux[1]) + '\n')
             f.close()
@@ -308,7 +320,8 @@ class Chem_SpaceVisualizationUI:
             gen_outprefix = st.text_input(label='chemspace_genoutprefix', key='chemspace_genoutprefix', on_change=self.SaveToInit)
             gen_frac = st.text_input(label='chemspace_genfrac', key='chemspace_genfrac', on_change=self.SaveToInit)
             if st.button(label='run umap generation', key='RunUMAP'):
-                pklfile, imgfile, csvfile, plotlyfig = self.ChSV.CreateMultiFile_UMap(gen_outpath, gen_outprefix, gen_infilelist,None, frac= gen_frac)
+                print (float(gen_frac))
+                pklfile, imgfile, csvfile, plotlyfig = self.ChSV.CreateMultiFile_UMap(gen_outpath, gen_outprefix, gen_infilelist, frac= float(gen_frac))
                 st.text(pklfile)
                 st.image(imgfile)
                 if plotlyfig is not None:

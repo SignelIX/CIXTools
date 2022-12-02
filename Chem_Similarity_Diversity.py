@@ -18,10 +18,17 @@ import math
 import streamlit as st
 import json
 import copy
+import os
+import numexpr
+import time
 
+CPU_COUNT = os.cpu_count()
+NUM_WORKERS = CPU_COUNT * 2
+if "NUMEXPR_MAX_THREADS" not in os.environ:
+    os.environ["NUMEXPR_MAX_THREADS"] = '16'
+numexpr.set_num_threads(numexpr.detect_number_of_cores())
 
 class Diversity:
-    NUM_WORKERS = 16
 
     def DiversitySelection (self, infile, out_file, n_analyzed, ss_file, deprotect_specfile,
                             exclude_file, n_cmpds, keeporder, priority_col, priority_val, propfilters):
@@ -402,11 +409,11 @@ class Diversity:
                 slist.append(c[0])
         inseries = pd.Series(slist)
 
-        ddf = dd.from_pandas(inseries, npartitions=self.NUM_WORKERS)
+        ddf = dd.from_pandas(inseries, npartitions=CPU_COUNT * 10)
         if showprog:
             pbar = ProgressBar()
             pbar.register()
-        res = ddf.apply(fptaskfcn, args=(), meta=(0, object)).compute()
+        res = ddf.apply(fptaskfcn, args=(), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
         if showprog:
             pbar.unregister()
 
@@ -522,15 +529,15 @@ class Diversity:
                     slist.append(c[0])
             inseries = pd.Series(slist)
 
-        ddf = dd.from_pandas(inseries, npartitions=self.NUM_WORKERS)
+        ddf = dd.from_pandas(inseries, npartitions=CPU_COUNT * 10)
         if showprog:
             pbar = ProgressBar()
             pbar.register()
 
         if dfmode:
-            res = ddf.apply(fptaskfcn, axis = 1, args=([bitvec, showprog]), meta=(0, object)).compute()
+            res = ddf.apply(fptaskfcn, axis = 1, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
         else:
-            res = ddf.apply(fptaskfcn, args=([bitvec, showprog]), meta=(0, object)).compute()
+            res = ddf.apply(fptaskfcn, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
 
         if showprog:
             pbar.unregister()
@@ -551,22 +558,22 @@ class Diversity:
             dfmode = True
         else:
             fp_series = pd.Series(fplist)
-        ddf = dd.from_pandas(fp_series, npartitions=self.NUM_WORKERS)
+        ddf = dd.from_pandas(fp_series, npartitions=CPU_COUNT * 10)
 
         if showprog:
             pbar = ProgressBar()
             pbar.register()
         if dfmode:
-            res = ddf.apply(comptaskfcn, axis = 1 , args=([compfplist]), meta=(0, object)).compute()
+            res = ddf.apply(comptaskfcn, axis = 1 , args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
         else:
-            res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute()
+            res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
         if showprog:
             pbar.unregister()
 
         return list(res)
 
 class Similarity:
-    chksz = 1000000
+    chksz = 10000000
     enum = Enumerate.Enumerate ()
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1):
         print (bbsmiles)
@@ -602,6 +609,8 @@ class Similarity:
         def processchunk (smileslist, df, outpath, smilesfps):
             searchdf, smilesfps = self.Run_SimilarityComp(smileslist, df, outpath, wmode, smilesfps)
             return searchdf, smilesfps
+
+
         reader = pd.read_csv(catfile, chunksize=self.chksz, sep=sep)
         cct = 0
         wmode = 'w'
@@ -622,6 +631,7 @@ class Similarity:
 
     def Run_SimilarityComp(self, smileslist, searchstrux, outpath, wmode, smilesfps):
         div = Diversity()
+
         if type(smileslist) == str:
             smileslist = [smileslist]
 
@@ -632,8 +642,14 @@ class Similarity:
         if 'SMILES' not in searchdf.columns:
             return None, None
         if smilesfps is None:
-            smilesfps = div.generatefps_dask(smileslist, showprog=False)
-        searchfps = div.generatefps_dask(searchdf, showprog=False)
+            smilesfps = div.generatefps_dask(smileslist, showprog=True)
+
+        start = time.perf_counter()
+        searchfps = div.generatefps_dask(searchdf, showprog=True)
+        print ('LENS:', len(smilesfps), len(searchfps))
+        next = time.perf_counter()
+        print (next-start)
+        start = next
         res = div.compfps_dask( smilesfps, searchfps )
         coldict = {}
         for s in range (0,len(smileslist)):
@@ -641,11 +657,18 @@ class Similarity:
         resdf = pd.DataFrame(res).transpose ()
         resdf= resdf.rename (columns = coldict)
         searchdf = pd.concat([searchdf, resdf], axis=1)
+        next = time.perf_counter()
+        print(next - start)
+        start = next
         if wmode == 'a':
             writehdrs = False
         else:
             writehdrs = True
-        searchdf.to_csv(outpath, mode=wmode, index=False, header=writehdrs)
+        search_ddf = dd.from_pandas(searchdf, npartitions=CPU_COUNT)
+        search_ddf.to_csv(outpath, mode=wmode, index=False, header=writehdrs)
+        next = time.perf_counter()
+        print(next - start)
+        start = next
         return searchdf, smilesfps
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
