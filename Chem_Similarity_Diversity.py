@@ -21,6 +21,8 @@ import copy
 import os
 import numexpr
 import time
+import NamingStandardizer as ns
+import sys
 
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
@@ -29,7 +31,7 @@ if "NUMEXPR_MAX_THREADS" not in os.environ:
 numexpr.set_num_threads(numexpr.detect_number_of_cores())
 
 class Diversity:
-
+    enum = Enumerate.Enumerate()
     def DiversitySelection (self, infile, out_file, n_analyzed, ss_file, deprotect_specfile,
                             exclude_file, n_cmpds, keeporder, priority_col, priority_val, propfilters):
         print (infile)
@@ -497,13 +499,13 @@ class Diversity:
             # chosen += 1
             # if chosen >= n_chosen:
             #     break
-    def generatefps_dask(self, inlist, showprog=True, bitvec=False):
+    def generatefps_dask(self, inlist, showprog=True, bitvec=False, SMILEScolname = 'SMILES'):
         def fptaskfcn(row, bitvec, showprog):
             try:
                 if type (row) == str:
                     m = Chem.MolFromSmiles(row)
                 else:
-                    m = Chem.MolFromSmiles(row['SMILES'])
+                    m = Chem.MolFromSmiles(row[SMILEScolname])
                 if not bitvec:
                     fp = Chem.GetHashedMorganFingerprint(m, radius=2, nBits=1024, useFeatures=False)
                 else:
@@ -572,9 +574,55 @@ class Diversity:
 
         return list(res)
 
+
+
+
 class Similarity:
     chksz = 10000000
     enum = Enumerate.Enumerate ()
+    def PrepBBs(self, bbdict, libname, rxnschemefile):
+        scheme, rxtnts = self.enum.ReadRxnScheme(rxnschemefile, libname, FullInfo=True)
+        dummyrxtnts = scheme['scaffold_dummy_structures']
+        self.enum.RunRxnScheme(dummyrxtnts, rxnschemefile, libname, False)
+        cycs = []
+        for cyc in bbdict.keys():
+            cycs.append(cyc)
+        for cx in range(0, len(cycs)):
+            bbdict[cycs[cx]]['dummy_smiles'] = None
+            bbdict[cycs[cx]]['skel_smiles'] = None
+            bbdict[cycs[cx]]['scaff_smiles'] = None
+            rxtnts = copy.deepcopy(dummyrxtnts)
+            for idx, row in bbdict[cycs[cx]].iterrows():
+                rxtnts[cx] = row['SMILES']
+                res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
+                if res[0] != 'FAIL':
+                    sdx = Chem.CanonSmiles(res[0])
+                    bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = sdx
+                    m = Chem.MolFromSmiles(sdx)
+                    scaff = MScaff.GetScaffoldForMol(m)
+                    skel = MScaff.MakeScaffoldGeneric(m)
+                    skel = MScaff.GetScaffoldForMol(skel)
+                    scx = Chem.MolToSmiles(scaff)
+                    skx = Chem.MolToSmiles(skel)
+                    bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = skx
+                    bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = scx
+                else:
+                    bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = 'FAIL'
+            bbdict[cycs[cx]] = bbdict[cycs[cx]][bbdict[cycs[cx]]['dummy_smiles'] != 'FAIL']
+        return bbdict
+
+    def Cluster_BBs(self, inpath, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile):
+        infilelist = self.enum.Get_BBFiles(bbspec, libspec, inpath, libname)
+        cycdict = self.enum.load_BBlists(infilelist,BBIDcolnames=BBIDcolnames, SMILEScolnames=SMILEScolnames)
+        bbdict = self.PrepBBs (cycdict, libname, rxnschemefile )
+        div = Diversity ()
+        for k in bbdict.keys ():
+            fps = div.generatefps_dask (bbdict [k], bitvec=True, SMILEScolname = 'dummy_smiles')
+            k_means = KMeans(n_clusters=8)
+            k_means.fit(fps)
+            bbdict [k]['clustnum'] = k_means.labels_
+            bbdict [k].to_csv (inpath + '/' + libname + '/BBLists/' +libname + '.'  + k + '.clust.csv')
+        return
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1):
         print (bbsmiles)
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
@@ -604,7 +652,6 @@ class Similarity:
             tnm_score = -1
 
         return tnm_score
-
     def SimSearchLargeFile (self, smileslist, catfile, outpath, sep):
         def processchunk (smileslist, df, outpath, smilesfps):
             searchdf, smilesfps = self.Run_SimilarityComp(smileslist, df, outpath, wmode, smilesfps)
@@ -628,7 +675,6 @@ class Similarity:
             wmode = 'a'
             cct += 1
         return
-
     def Run_SimilarityComp(self, smileslist, searchstrux, outpath, wmode, smilesfps):
         div = Diversity()
 
@@ -874,5 +920,12 @@ class Chem_Similarity_DiversityUI:
         self.body ()
 
 if __name__ == "__main__":
-    csvis = Chem_Similarity_DiversityUI ()
-    csvis.RunUI()
+    if len (sys.argv) == 0:
+        csvis = Chem_Similarity_DiversityUI ()
+        csvis.RunUI()
+    else:
+        sim = Similarity ()
+        BBIDcolnames = ['BB Code']
+        SMILEScolnames = ['EFN CSmiles']
+        rxnschemefile = '/Users/eric/OneDrive/Consulting/Projects/1859/Enumerations/RxnSchemes.json'
+        sim.Cluster_BBs ('/Users/eric/OneDrive/Consulting/Projects/1859/Enumerations/', 'LDS0020', '','', BBIDcolnames, SMILEScolnames, rxnschemefile)

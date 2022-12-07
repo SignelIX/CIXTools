@@ -658,24 +658,45 @@ class Enumerate:
         df.to_csv(outpath + '.' + outsuff + '.all.dedup.csv')
         return outpath + '.' + outsuff + '.all.dedup.csv'
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False):
-        outspecprefix = ''
-        if bbspec != '' and bbspec is not None:
-            outspecprefix = '/' + outspec
-        bbpath = inpath + libname + outspecprefix + '/BBLists'
-        flist = pathlib.Path(bbpath).glob('*.' + bbspec + '*.csv')
+    def Get_BBFiles (self, bbspec, libspec, inpath, libname   ):
+        libspecprefix = ''
+        if libspec != '' and libspec is not None:
+            libspecprefix = '/' + libspec
+        bbpath = inpath + libname + libspecprefix + '/BBLists'
+        flist = pathlib.Path(bbpath).glob('*' + bbspec + '*.csv')
+
         infilelist = []
 
         for f in flist:
+            print ('FLIST:', f)
             c = str(f)
             result = re.search(r'\.BB[0-9]+\.', c)
             if result is not None:
-                infilelist.append (c)
-        infilelist.sort ()
+                infilelist.append(c)
+        infilelist.sort()
         if len(infilelist) == 0:
-            print ('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath, infilelist)
+            print('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath, infilelist)
             return ''
+        return infilelist
 
+    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False):
+        # outspecprefix = ''
+        # if outspec != '' and outspec is not None:
+        #     outspecprefix = '/' + outspec
+        # bbpath = inpath + libname + outspecprefix + '/BBLists'
+        # flist = pathlib.Path(bbpath).glob('*.' + bbspec + '*.csv')
+        # infilelist = []
+        #
+        # for f in flist:
+        #     c = str(f)
+        #     result = re.search(r'\.BB[0-9]+\.', c)
+        #     if result is not None:
+        #         infilelist.append (c)
+        # infilelist.sort ()
+        # if len(infilelist) == 0:
+        #     print ('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath, infilelist)
+        #     return ''
+        infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
         if rxschemefile is None:
             rxschemefile = inpath + 'RxnSchemes.json'
 
