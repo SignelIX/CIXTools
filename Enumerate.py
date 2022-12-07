@@ -1262,10 +1262,12 @@ class EnumerationCLI :
                 rd = args["removedups"]
 
         enum = Enumerate()
+        print ('Starting Enumeration')
         outf = enum.EnumFromBBFiles(args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'],
                              args['scheme'] + addspec, args['numstrux'],
                              args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd)
         print ('output prefix', outf)
+        print('End Enumeration')
 
 
 if __name__=="__main__":
