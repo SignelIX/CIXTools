@@ -13,14 +13,15 @@ NUM_WORKERS = 16
 
 class Chem_CalcProps:
     def addPropsToFile (self, infile, outfilename,  smiles_col = 'SMILES', bbidcols = ['bb1', 'bb2','bb3']):
-        def taskfcn(row):
+        def taskfcn(row, smiles_col):
             rowvals = []
+
             if row [smiles_col] == 'FAIL':
                 for b in bbidcols:
                     rowvals.append (row [b])
                 for b in bbidcols:
                     rowvals.append ( row[b + '_smiles'])
-                rowvals.append (row['full_smiles']),
+                rowvals.append (row[smiles_col]),
                 rowvals.append ([None, None, None, None, None, None, None, None, None, None])
             else:
                 mol = Chem.MolFromSmiles(row[smiles_col])
@@ -45,7 +46,7 @@ class Chem_CalcProps:
         pbar = ProgressBar()
         pbar.register()
         meta_dict = {0:float, 1:float, 2:float, 3:int, 4:str, 5:int, 6:int, 7:int, 8:float, 9:float}
-        res = ddf.apply(taskfcn, axis=1, result_type='expand', args=(), meta=meta_dict).compute()
+        res = ddf.apply(taskfcn, axis=1, result_type='expand', args=([smiles_col]), meta=meta_dict).compute()
         res.columns = ['SlogP', 'TPSA', 'AMW', 'RBs', 'CSMILES', 'HBD', 'HBA', 'HAC', 'SP3', 'ExactMW']
         df = df.merge(res, left_index=True, right_index=True)
         df.to_csv(outfilename, index=False)

@@ -23,6 +23,10 @@ import numexpr
 import time
 import NamingStandardizer as ns
 import sys
+from st_aggrid import AgGrid
+from st_aggrid.grid_options_builder import  GridOptionsBuilder
+from st_aggrid import GridUpdateMode, DataReturnMode
+import MolDisplay
 
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
@@ -523,6 +527,7 @@ class Diversity:
                 return None
             dfmode = True
         else:
+            print (inlist)
             if (type(inlist[0]) == str):
                 slist = inlist
             else:
@@ -580,51 +585,79 @@ class Diversity:
 class Similarity:
     chksz = 10000000
     enum = Enumerate.Enumerate ()
-    def PrepBBs(self, bbdict, libname, rxnschemefile):
+    def PrepBBs(self, bbdict, libname, rxnschemefile, sim_column='dummy_smiles'):
         scheme, rxtnts = self.enum.ReadRxnScheme(rxnschemefile, libname, FullInfo=True)
         dummyrxtnts = scheme['scaffold_dummy_structures']
-        self.enum.RunRxnScheme(dummyrxtnts, rxnschemefile, libname, False)
+        #self.enum.RunRxnScheme(dummyrxtnts, rxnschemefile, libname, False)
         cycs = []
         for cyc in bbdict.keys():
             cycs.append(cyc)
         for cx in range(0, len(cycs)):
-            bbdict[cycs[cx]]['dummy_smiles'] = None
-            bbdict[cycs[cx]]['skel_smiles'] = None
-            bbdict[cycs[cx]]['scaff_smiles'] = None
-            rxtnts = copy.deepcopy(dummyrxtnts)
-            for idx, row in bbdict[cycs[cx]].iterrows():
-                rxtnts[cx] = row['SMILES']
-                res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
-                if res[0] != 'FAIL':
-                    sdx = Chem.CanonSmiles(res[0])
-                    bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = sdx
-                    m = Chem.MolFromSmiles(sdx)
-                    scaff = MScaff.GetScaffoldForMol(m)
-                    skel = MScaff.MakeScaffoldGeneric(m)
-                    skel = MScaff.GetScaffoldForMol(skel)
-                    scx = Chem.MolToSmiles(scaff)
-                    skx = Chem.MolToSmiles(skel)
-                    bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = skx
-                    bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = scx
-                else:
-                    bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = 'FAIL'
-            bbdict[cycs[cx]] = bbdict[cycs[cx]][bbdict[cycs[cx]]['dummy_smiles'] != 'FAIL']
+            if bbdict [cycs[cx]] is not None:
+                bbdict[cycs[cx]]['dummy_smiles'] = None
+                bbdict[cycs[cx]]['skel_smiles'] = None
+                bbdict[cycs[cx]]['scaff_smiles'] = None
+                rxtnts = copy.deepcopy(dummyrxtnts)
+                for idx, row in tqdm(bbdict[cycs[cx]].iterrows(), total=len(bbdict[cycs[cx]])):
+                    rxtnts[cx] = row['SMILES']
+                    # try:
+                    res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
+                    # except Exception as e:
+                    #     print (rxtnts)
+                    #     print (e)
+
+                    if res[0] != 'FAIL':
+                        sdx = Chem.CanonSmiles(res[0])
+                        bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = sdx
+                        m = Chem.MolFromSmiles(sdx)
+                        try:
+                            scaff = MScaff.GetScaffoldForMol(m)
+                            skel = MScaff.MakeScaffoldGeneric(m)
+                            skel = MScaff.GetScaffoldForMol(skel)
+                            scx = Chem.MolToSmiles(scaff)
+                            skx = Chem.MolToSmiles(skel)
+                            bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = skx
+                            bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = scx
+                        except:
+                            bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = 'FAIL'
+                            bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = 'FAIL'
+                    else:
+                        bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = 'FAIL'
+                        bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = 'FAIL'
+                        bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = 'FAIL'
+                bbdict[cycs[cx]] = bbdict[cycs[cx]][bbdict[cycs[cx]][sim_column] != 'FAIL']
         return bbdict
 
-    def Cluster_BBs(self, inpath, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile):
-        infilelist = self.enum.Get_BBFiles(bbspec, libspec, inpath, libname)
-        cycdict = self.enum.load_BBlists(infilelist,BBIDcolnames=BBIDcolnames, SMILEScolnames=SMILEScolnames)
-        bbdict = self.PrepBBs (cycdict, libname, rxnschemefile )
+    def Cluster_BBs(self, path, infiles, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile, nclusters, mw_cutoff, simcolumn = 'dummy_smiles'):
+        if infiles is not None:
+            infilelist = infiles
+        else:
+            infilelist = self.enum.Get_BBFiles(bbspec, libspec, path, libname)
+        cycdict = self.enum.load_BBlists(infilelist, BBIDcolnames=BBIDcolnames, SMILEScolnames=SMILEScolnames)
+
+        for k in cycdict.keys ():
+            if cycdict[k] is not None:
+                print('START LEN', len(cycdict[k]))
+                cycdict[k] = cycdict[k][cycdict[k]['MWT']<=mw_cutoff]
+                print('END LEN', len(cycdict[k]))
+                print (len(cycdict[k]))
+        bbdict = self.PrepBBs (cycdict, libname, rxnschemefile, simcolumn )
         div = Diversity ()
+
         for k in bbdict.keys ():
-            fps = div.generatefps_dask (bbdict [k], bitvec=True, SMILEScolname = 'dummy_smiles')
-            k_means = KMeans(n_clusters=8)
-            k_means.fit(fps)
-            bbdict [k]['clustnum'] = k_means.labels_
-            bbdict [k].to_csv (inpath + '/' + libname + '/BBLists/' +libname + '.'  + k + '.clust.csv')
+            if bbdict[k] is not None:
+                fps = div.generatefps_dask (bbdict [k], bitvec=True, SMILEScolname = simcolumn)
+                for x in range (0, len (bbdict[k])):
+                    if fps [x] is None:
+                        print  (bbdict[k].iloc [x], 'None')
+
+
+                k_means = KMeans(n_clusters=nclusters)
+                k_means.fit(fps)
+                bbdict [k]['clustnum'] = k_means.labels_
+                bbdict [k].to_csv (path + '/' + libname + '/BBLists/' +libname + '.'  + k + '.clust.csv')
         return
-    def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1):
-        print (bbsmiles)
+    def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None):
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
         reslist = []
         for idx, row in comp_bbdf.iterrows ():
@@ -634,10 +667,22 @@ class Similarity:
             else:
                 comp_dummyscaff = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, compsmiles, rxtntnum)
                 tnm = self.TanimotoComparison(dummyscaff, comp_dummyscaff)
-                #md.ShowMols ([dummyscaff, comp_dummyscaff])
                 reslist.append ([row ['BB_ID'],  tnm, row ['SMILES']])
         reslist = sorted(reslist, key=operator.itemgetter(1), reverse=True)
-        return reslist [0:retct]
+
+        if excludelist is None:
+            return reslist[0:retct]
+        ct = 0
+        next = 0
+        outlist = []
+        while ct < retct:
+            if reslist[next] [0] not in excludelist:
+                outlist.append(reslist[next] )
+                ct += 1
+
+            next += 1
+        return outlist
+
     def TanimotoComparison (self, smiles1, smiles2 ):
         #currently hardcoded to Morgan2
         try:
@@ -692,7 +737,6 @@ class Similarity:
 
         start = time.perf_counter()
         searchfps = div.generatefps_dask(searchdf, showprog=True)
-        print ('LENS:', len(smilesfps), len(searchfps))
         next = time.perf_counter()
         print (next-start)
         start = next
@@ -878,7 +922,7 @@ class Similarity:
 
 class Chem_Similarity_DiversityUI:
     initpath = '../CIxTools.init.json'
-    paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles']
+    paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles', 'bbsim_inputfile', 'bbsim_inputsmiles', 'bbsim_rxnschemefile','bbsim_schemename', 'bbsim_rxtntnum', 'bbsim_retct', 'bbsim_filtcol', 'bbsim_filtvals']
     sim = Similarity ()
 
     def __init__ (self):
@@ -891,7 +935,13 @@ class Chem_Similarity_DiversityUI:
                     st.session_state[p] = initjson [p]
                 else:
                     st.session_state[p] = ''
-    def body (self):
+    def body (self, param):
+        if param == 'Sim Search':
+            self.simsearchbody ()
+        if param == 'BB Similarity':
+            self.bbsimbody ()
+
+    def simsearchbody (self):
         st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
             Similarity Search</h1>""", unsafe_allow_html=True)
         inputfile = st.text_input (label = 'input file', key = 'simdiv_inputfile', on_change=self.SaveToInit)
@@ -906,6 +956,73 @@ class Chem_Similarity_DiversityUI:
                     sep  =','
                 self.sim.SimSearchLargeFile([smiles], inputfile, outpath, sep= sep)
 
+    def bbsimbody(self):
+        st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
+               BB Similarity Search</h1>""", unsafe_allow_html=True)
+        inputfile = st.text_input(label='input file', key='bbsim_inputfile', on_change=self.SaveToInit)
+        smiles = st.text_input(label='input smiles (; separated', key='bbsim_inputsmiles', on_change=self.SaveToInit)
+        rxnschemefile = st.text_input(label='rxnschemefile', key='bbsim_rxnschemefile', on_change=self.SaveToInit)
+        schemename = st.text_input(label='schemename', key='bbsim_schemename', on_change=self.SaveToInit)
+        rxtntnum = st.text_input(label='rxtntnum (0 based)', key='bbsim_rxtntnum', on_change=self.SaveToInit)
+        retct = st.text_input(label='retct', key='bbsim_retct', on_change=self.SaveToInit)
+        sep = st.selectbox(label='Delimiter', options=['COMMA', 'TAB'], index=0)
+        filtercol = st.text_input(label='filtcol', key='bbsim_filtcol', on_change=self.SaveToInit)
+        filtvals = st.text_input(label='filtvals (; separated)', key='bbsim_filtvals', on_change=self.SaveToInit)
+        gb = GridOptionsBuilder ()
+        gb.configure_default_column(groupable=True,
+                                    value=True,
+                                    enableRowGroup=True,
+                                    editable=True,
+                                    enableRangeSelection=True,
+                                    )
+        # Column configs
+        gb.configure_column("BB_ID",
+                            headerName="BB ID",
+                            width=100)
+        gb.configure_column("SIMILARITY",
+                            headerName="Similarity",
+                            type=["numericColumn", "numberColumnFilter"],
+                            width=50)
+        gb.configure_column("SMILES",
+                            headerName="SMILES",
+                            width=50)
+        gb.configure_column("search_smiles",
+                            headerName="search_smiles",
+                            width=50)
+        gridOptions = gb.build()
+        if st.button(label='Run BB Similarity (smiles v. file)'):
+            with st.spinner('Running BB Similarity'):
+                outpath = inputfile.replace('.csv', '') + '.simrun.csv'
+                if sep == 'TAB':
+                    sep = '\t'
+                else:
+                    sep = ','
+                comp_bbdf = pd.read_csv (inputfile)
+                filtvalsplit = filtvals.split(';')
+                comp_bbdf=comp_bbdf[comp_bbdf[filtercol].isin( filtvalsplit)]
+                smilessplit = smiles.split (';')
+                outdf = None
+                for s in smilessplit:
+                    if outdf is not None:
+                        excludelist = list(outdf['BB_ID'])
+                    else:
+                        excludelist = None
+
+                    res = self.sim.Find_MostSimilarBB(s, comp_bbdf, rxnschemefile, schemename, int(rxtntnum), int(retct), excludelist=excludelist)
+                    resdf = pd.DataFrame (res, columns = ['BB_ID', 'SIMILARITY',  'SMILES'])
+                    resdf ['search_smiles'] = s
+                    if outdf is None:
+                        outdf = resdf
+                    else:
+                        outdf = outdf.append(resdf)
+                st.session_state['aggriddata'] = outdf
+                print (outdf)
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions, )
+        else:
+            if 'aggriddata' in  st.session_state:
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions,)
+
+
     def SaveToInit(self):
 
         with open(self.initpath, "r") as jsonFile:
@@ -916,16 +1033,12 @@ class Chem_Similarity_DiversityUI:
         with open(self.initpath, "w") as jsonFile:
             jsonFile.write(json.dumps(data, indent=4))
 
-    def RunUI (self):
-        self.body ()
+    def RunUI (self, param):
+        self.body (param)
 
 if __name__ == "__main__":
-    if len (sys.argv) == 0:
-        csvis = Chem_Similarity_DiversityUI ()
-        csvis.RunUI()
-    else:
-        sim = Similarity ()
-        BBIDcolnames = ['BB Code']
-        SMILEScolnames = ['EFN CSmiles']
-        rxnschemefile = '/Users/eric/OneDrive/Consulting/Projects/1859/Enumerations/RxnSchemes.json'
-        sim.Cluster_BBs ('/Users/eric/OneDrive/Consulting/Projects/1859/Enumerations/', 'LDS0020', '','', BBIDcolnames, SMILEScolnames, rxnschemefile)
+    if st._is_running_with_streamlit:
+        if len (sys.argv) == 0:
+            csvis = Chem_Similarity_DiversityUI ('Sim Search')
+            csvis.RunUI()
+

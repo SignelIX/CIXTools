@@ -256,7 +256,11 @@ class Enumerate:
                         else:
                             rlist.append (r)
                     reaction = rlist
-                p, outct, products = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
+                try:
+                    p, outct, products = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
+                except:
+                    p = None
+                    outct = 0
                 if outct > 0:
                     prod_ct *= outct
             if showmols:
@@ -431,7 +435,7 @@ class Enumerate:
             df =  df.append (dp_list)
             df.to_csv (dp_outfile)
 
-    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath'):
+    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True):
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
@@ -548,11 +552,11 @@ class Enumerate:
             enum_in = resdf
             hdrs = None
             outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
-                                        removeduplicateproducts, appendmode = False)
+                                        removeduplicateproducts, appendmode = False, write_fails_enums=write_fails_enums)
 
         return outpath
 
-    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False):
+    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True):
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
 
             reslist = []
@@ -601,8 +605,9 @@ class Enumerate:
                 enumdf = moddf[~moddf['full_smiles'].isin( ['FAIL','FAIL--MULTIPLE PRODUCTS'])]
                 enumdf.to_csv(outpath + '.' + outsuff + '.enum.csv', mode='a', index=False, header=False)
                 faildf = moddf[moddf['full_smiles'].isin(['FAIL','FAIL--MULTIPLE PRODUCTS'])]
-                faildf.to_csv(outpath + '.' + outsuff + '.fail.csv', mode='a', index=False, header=False)
-                moddf.to_csv(outpath + '.' + outsuff + '.all.csv', mode='a', index=False, header=False)
+                if write_fails_enums:
+                    faildf.to_csv(outpath + '.' + outsuff + '.fail.csv', mode='a', index=False, header=False)
+                    moddf.to_csv(outpath + '.' + outsuff + '.all.csv', mode='a', index=False, header=False)
                 gc.collect()
                 return None
             else:
@@ -620,7 +625,10 @@ class Enumerate:
             outsuff = str(rndct)
         hdrstr = ','.join (hdrs)
         if outpath is not None:
-            flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
+            if not write_fails_enums:
+                flist = [outpath + '.' + outsuff + '.all.csv',None, None]
+            else:
+                flist = [outpath + '.' + outsuff + '.all.csv', outpath + '.' + outsuff + '.fail.csv', outpath + '.' + outsuff + '.enum.csv']
             if appendmode == False:
                 for fname in flist:
                     f = open(fname, 'w')
@@ -679,24 +687,9 @@ class Enumerate:
             return ''
         return infilelist
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False):
-        # outspecprefix = ''
-        # if outspec != '' and outspec is not None:
-        #     outspecprefix = '/' + outspec
-        # bbpath = inpath + libname + outspecprefix + '/BBLists'
-        # flist = pathlib.Path(bbpath).glob('*.' + bbspec + '*.csv')
-        # infilelist = []
-        #
-        # for f in flist:
-        #     c = str(f)
-        #     result = re.search(r'\.BB[0-9]+\.', c)
-        #     if result is not None:
-        #         infilelist.append (c)
-        # infilelist.sort ()
-        # if len(infilelist) == 0:
-        #     print ('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath, infilelist)
-        #     return ''
+    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True):
         infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
+        print (infilelist)
         if rxschemefile is None:
             rxschemefile = inpath + 'RxnSchemes.json'
 
@@ -710,7 +703,7 @@ class Enumerate:
 
         if returndf is True:
             outpath = None
-        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups)
+        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums)
         return outfile
 
     def FilterBBs(self, bbdict, filterfile):
@@ -822,21 +815,25 @@ class Enumerate:
                 cyc = cyclesplit[len(cyclesplit) - 2]
                 cycs.append(cyc)
                 if type(l) is str:
-                    bbdict[cyc] = pd.read_csv(l)
+                    if '.' not in l:
+                        bbdict [cyc] = None
+                    else:
+                        bbdict[cyc] = pd.read_csv(l)
 
         for cyc in bbdict.keys():
-            changecoldict = {}
-            if SMILEScolnames is not None and len (SMILEScolnames) > 0:
-                for smc in SMILEScolnames:
-                    if smc in bbdict[cyc].columns:
-                        changecoldict[smc] = 'SMILES'
-            if BBIDcolnames is not None and len (BBIDcolnames) > 0:
-                for bbidc in BBIDcolnames:
-                    if bbidc in bbdict[cyc].columns:
-                        changecoldict[bbidc] = 'BB_ID'
-            if len(changecoldict) > 0:
-                bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
-            bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first").reset_index(drop=True)
+            if bbdict [cyc] is not None:
+                changecoldict = {}
+                if SMILEScolnames is not None and len (SMILEScolnames) > 0:
+                    for smc in SMILEScolnames:
+                        if smc in bbdict[cyc].columns:
+                            changecoldict[smc] = 'SMILES'
+                if BBIDcolnames is not None and len (BBIDcolnames) > 0:
+                    for bbidc in BBIDcolnames:
+                        if bbidc in bbdict[cyc].columns:
+                            changecoldict[bbidc] = 'BB_ID'
+                if len(changecoldict) > 0:
+                    bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
+                bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first").reset_index(drop=True)
         return bbdict
 
     def pull_BBs(self, inpath, idcol, smilescol):
@@ -881,7 +878,7 @@ class Enumerate:
             inrxtnts = scheme['scaffold_dummy_structures']
             if bbsmiles is not None and rxtntnum is not None:
                 inrxtnts [rxtntnum] = bbsmiles
-            p, prod_ct, [scheme, rxtants] =  self.RunRxnScheme(inrxtnts, rxnschemefile, schemename, False)
+            p, prod_ct, [scheme, rxtants, intermeds] =  self.RunRxnScheme(inrxtnts, rxnschemefile, schemename, False)
             return p
 
 class EnumerationUI:
@@ -1121,18 +1118,14 @@ class EnumerationUI:
                             st.session_state['bb' + str(n) + 'txt'] = selected['selected_rows'][0]['bb' + str (n+1) + '_smiles' ]
                         Enumerate = True
 
-
-
-
         with cont3:
             with colx1:
-
-
                 rxtnts = [None] * len(dfs)
+
                 for n in range (0, len(dfs)) :
                     df = dfs[n]
+                    rxtnts[n] = st.text_input(key='bb' + str(n) + 'txt', label='BB' + str(n + 1) + ' (override)')
                     if df is not None:
-                        rxtnts[n] = st.text_input(key='bb' +str(n) + 'txt', label='BB' + str(n+1) + ' (override)')
                         if rxtnts[n] == '':
                              rxtnts[n] = st.selectbox(label='BB' + str (n + 1), options=dfs[n][smilescol]
                                  , key='bb' + str (n ),
@@ -1229,6 +1222,8 @@ class EnumerationCLI :
                             help='number of structures to enumerate (-1 for all)')
         parser.add_argument('-rd', '--removedups', nargs='?', default=None, type=str,
                             help='Remove duplicate structures (True/False)')
+        parser.add_argument('-wfe', '--write_fails_enums', nargs='?', default=None, type=str,
+                            help='Write Fails and Enumerated Molecules in separate files (True/False)')
         args = vars(parser.parse_args())
 
         if args['paramfile'] is not None:
@@ -1260,12 +1255,23 @@ class EnumerationCLI :
                     exit()
             else:
                 rd = args["removedups"]
+        if 'write_fails_enums' in args:
+            if args['write_fails_enums'] not in [True, False]:
+                if args['write_fails_enums'] == 'True':
+                    write_fails_enums = True
+                elif args['write_fails_enums'] == 'False':
+                    write_fails_enums = False
+                else:
+                    'Fail: rd must be True or False'
+                    exit()
+            else:
+                write_fails_enums = args["write_fails_enums"]
 
         enum = Enumerate()
         print ('Starting Enumeration')
         outf = enum.EnumFromBBFiles(args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'],
                              args['scheme'] + addspec, args['numstrux'],
-                             args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd)
+                             args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums)
         print ('output prefix', outf)
         print('End Enumeration')
 
