@@ -671,8 +671,10 @@ class Enumerate:
         if libspec != '' and libspec is not None:
             libspecprefix = '/' + libspec
         bbpath = inpath + libname + libspecprefix + '/BBLists'
-        flist = pathlib.Path(bbpath).glob('*' + bbspec + '*.csv')
-
+        if bbspec is not None and bbspec != '':
+            flist = pathlib.Path(bbpath).glob('*' + bbspec + '*.csv')
+        else:
+            flist = pathlib.Path(bbpath).glob('*.csv')
         infilelist = []
 
         for f in flist:
@@ -1209,6 +1211,7 @@ class EnumerationUI:
 class EnumerationCLI :
     @staticmethod
     def Run_CLI (SMILEScolnames = None, BBcolnames = None):
+
         paramdefaults = [ ('rxnschemefile', './RxnSchemes.json'), ('schemepath','.'), ('scheme',''), ('schemespec',''), ('numstrux', 5000), ('removedups', False)]
         parser = argparse.ArgumentParser(description='Enumeration Options')
         parser.add_argument('-p', '--paramfile', nargs='?', default=None, type=str,
@@ -1255,6 +1258,7 @@ class EnumerationCLI :
                     exit()
             else:
                 rd = args["removedups"]
+
         if 'write_fails_enums' in args:
             if args['write_fails_enums'] not in [True, False]:
                 if args['write_fails_enums'] == 'True':
@@ -1262,7 +1266,7 @@ class EnumerationCLI :
                 elif args['write_fails_enums'] == 'False':
                     write_fails_enums = False
                 else:
-                    'Fail: rd must be True or False'
+                    print ('Fail: write_fails_enums must be True or False')
                     exit()
             else:
                 write_fails_enums = args["write_fails_enums"]
