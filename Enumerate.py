@@ -509,6 +509,72 @@ class Enumerate:
 
             appendmode = False
 
+            breakpoint()
+
+            import itertools
+            import numpy as np
+            import multiprocessing as mp
+            import warnings
+
+            prtn_indx = 2
+            prtn_step = 10
+            prtn_len = len(bdfs[prtn_indx])
+            prtn_sze = prtn_len // prtn_step
+            
+            chunk_step = 10
+
+            def enumerate_library(*args):
+                args = [arg for arg in args]
+                args_nmbr = [len(arg) for arg in args]
+                args_perm = [list(range(arg)) for arg in args_nmbr]
+                args_perm =np.array(list(itertools.product(*args_perm)), dtype=np.int8)
+                df = []
+                for perm in args_perm:
+                    bblist = []
+                    for idx in range(len(args)):
+                        data = args[idx].iloc[perm[idx]]
+                        bb = data["BB_ID"]
+                        bbs = data["SMILES"]
+                        bblist.append(bb)
+                        bblist.append(bbs)
+                    df.append(bblist)
+                df = pd.DataFrame(df)
+                columns = [["bb"+str(ix+1), "bb" + str(ix + 1) + "_smiles"] for ix in range(len(args))]
+                columns = sum(columns, [])
+                df.columns = columns
+                assert(len(df) == np.product(args_nmbr))
+                return df
+
+            def library_pipeline(*args):
+                df_library = enumerate_library(args)
+
+            def library_partition(shard_file, prtn_indx, chunk_step, *args):
+                shard_file_chunks = [f"{shard_file}_{i}.csv.gz" for i in range(chunk_step)]
+                args = [arg for arg in args]
+                if NUM_WORKERS / chunk_step < 1: 
+                    warnings.warn("Not enough threads on the machine, consider reducing the number of chunk steps")
+                process = mp.Pool(NUM_WORKERS)
+                chunk_smiles = np.array_split(args[prtn_indx].pop(), NUM_WORKERS)
+                chunked_args = []
+                for idx in range(len(chunk_smiles)):
+                    args_copy = copy.deepcopy(args)
+                    args_copy.insert(prtn_indx, chunked_args[idx])
+                    chunked_args.append(args_copy)
+                n_enums = process.map(library_pipeline, args)
+                process.terminate()
+                process.join()
+
+            for shrd_idx, begin_idx in enumerate(range(0, prtn_len, prtn_sze)):
+                pbar = ProgressBar()
+                pbar.register()
+                shard_file = os.path.join(outpath, f"/shards/shard_{shrd_idx}")
+                end_idx = min(prtn_len, begin_idx + prtn_sze)
+                args = [bdfs[i][begin_idx: end_idx] if i==prtn_indx else bdfs[i] for i in range(len(bdfs))]
+                n_enums = library_partition(shard_file, prtn_indx, chunk_step, args)
+
+                pbar.unregister()
+            
+
             if rndct == -1 :
                 hdrs = []
                 for ix in range(0, cycct):
