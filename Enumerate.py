@@ -36,13 +36,18 @@ from st_aggrid import AgGrid
 from st_aggrid.grid_options_builder import  GridOptionsBuilder
 from st_aggrid import GridUpdateMode, DataReturnMode
 import numexpr
-
+import numpy as np
+import itertools
+import warnings
+import multiprocessing as mp
+from pathos.multiprocessing import ProcessingPool as Pool
 CPU_COUNT = os.cpu_count()
-NUM_WORKERS = CPU_COUNT * 2
+NUM_WORKERS = CPU_COUNT 
 chksz = 50000
 numexpr.set_num_threads(numexpr.detect_number_of_cores())
 if "NUMEXPR_MAX_THREADS" not in os.environ:
     os.environ["NUMEXPR_MAX_THREADS"] = '16'
+
 
 class Enumerate:
     rxndict = {}
@@ -509,124 +514,119 @@ class Enumerate:
 
             appendmode = False
 
-            breakpoint()
-
-            import itertools
-            import numpy as np
-            import multiprocessing as mp
-            import warnings
+            bdfs = [x.head(30) for x in bdfs]
 
             prtn_indx = 2
-            prtn_step = 10
+            prtn_step = 5
+            chunk_step = 4
+
             prtn_len = len(bdfs[prtn_indx])
             prtn_sze = prtn_len // prtn_step
-            
-            chunk_step = 10
 
-            bdfs = [x.head(22) for x in bdfs]
+            def library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct):
 
-            breakpoint()
+                def oldtaskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
 
-            def oldtaskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
+                    #showstrux = False
 
-                #showstrux = False
+                    rxtnts = []
+                    for ix in range(0, cycct):
+                        rxtnts.append(row['bb' + str(ix + 1) + '_smiles'])
+                    try:
+                        res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+                        if prodct > 1:
+                            return 'FAIL--MULTIPLE PRODUCTS'
+                    except:
+                        return 'FAIL'
 
-                rxtnts = []
-                for ix in range(0, cycct):
-                    rxtnts.append(row['bb' + str(ix + 1) + '_smiles'])
-                try:
-                    res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
-                    if prodct > 1:
-                        return 'FAIL--MULTIPLE PRODUCTS'
-                except:
-                    return 'FAIL'
-
-                return res
+                    return res
 
 
-            def enumerate_library(args):
-                args_nmbr = [len(arg) for arg in args]
-                args_perm = [list(range(arg)) for arg in args_nmbr]
-                args_perm =np.array(list(itertools.product(*args_perm)), dtype=np.int8)
-                df = []
-                for perm in args_perm:
-                    bblist = []
-                    for idx in range(len(args)):
-                        data = args[idx].iloc[perm[idx]]
-                        bb = data["BB_ID"]
-                        bbs = data["SMILES"]
-                        bblist.append(bb)
-                        bblist.append(bbs)
-                    df.append(bblist)
-                df = pd.DataFrame(df)
-                columns = [["bb"+str(ix+1), "bb" + str(ix + 1) + "_smiles"] for ix in range(len(args))]
-                columns = sum(columns, [])
-                df.columns = columns
-                assert(len(df) == np.product(args_nmbr))
-                return df
+                def enumerate_library(args):
+                    args_nmbr = [len(arg) for arg in args]
+                    args_perm = [list(range(arg)) for arg in args_nmbr]
+                    args_perm =np.array(list(itertools.product(*args_perm)), dtype=np.int8)
+                    df = []
+                    for perm in args_perm:
+                        bblist = []
+                        for idx in range(len(args)):
+                            data = args[idx].iloc[perm[idx]]
+                            bb = data["BB_ID"]
+                            bbs = data["SMILES"]
+                            bblist.append(bb)
+                            bblist.append(bbs)
+                        df.append(bblist)
+                    df = pd.DataFrame(df)
+                    columns = [["bb"+str(ix+1), "bb" + str(ix + 1) + "_smiles"] for ix in range(len(args))]
+                    columns = sum(columns, [])
+                    df.columns = columns
+                    assert(len(df) == np.product(args_nmbr))
+                    return df
 
 
-            def library_wrapper(rxschemefile, libname, rndct, schemeinfo):
-                def library_pipeline(data):
-                    breakpoint()
-                    args, shard_file_chunk_name = data
-                    df_library = enumerate_library(args)
-                    result = df_library.apply(
+                def library_pipeline(tup):
+                    args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name = tup
+                    library_df = enumerate_library(args)
+                    result = library_df.apply(
                         oldtaskfcn, 
                         axis=1, 
                         result_type="expand", 
                         args=(libname, rxschemefile, rndct == 1, schemeinfo, len(args))
                     )
-                    result = result.rename(columns={0: "full_smiles"})
-                    result.to_csv(shard_file_chunk_name, index=False)
-                    return len(result)
-                return library_pipeline
+                    result = pd.DataFrame(result).rename(columns={0: "full_smiles"})
+                    library_ids = ["bb"+str(ix+1) for ix in range(len(args))]
+                    result.index = library_df[library_ids].apply(lambda r: '_'.join(r), axis=1).tolist()
+                    #result = df_library.apply(oldtaskfcn, axis=1, result_type="expand", args=(libname, rxschemefile, rndct == 1, schemeinfo, len(args)))
+                    result.to_csv(shard_file_chunk_name)
+                    
 
+                def library_wrapper(rxschemefile, libname, rndct, schemeinfo):
+                    def library_pipeline(data):
+                        args, shard_file_chunk_name = data
+                        df_library = enumerate_library(args)
+                        result = df_library.apply(
+                            oldtaskfcn, 
+                            axis=1, 
+                            result_type="expand", 
+                            args=(libname, rxschemefile, rndct == 1, schemeinfo, len(args))
+                        )
+                        result = result.rename(columns={0: "full_smiles"})
+                        result.to_csv(shard_file_chunk_name, index=False)
+                        return len(result)
+                    return library_pipeline
+                
+                schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
-            def library_pipeline(tup):
-                args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name = tup
-                df_library = enumerate_library(args)
-                result = df_library.apply(
-                    oldtaskfcn, 
-                    axis=1, 
-                    result_type="expand", 
-                    args=(libname, rxschemefile, rndct == 1, schemeinfo, len(args))
-                )
-                breakpoint()
-                result = result.rename(columns={0: "full_smiles"})
-                result.to_csv(shard_file_chunk_name, index=False)
-                return len(result)
+                if NUM_WORKERS > 1 and len(args[prtn_indx]) >= NUM_WORKERS:
+                    process = Pool(NUM_WORKERS)
+                    shard_file_chunk_names = [f"{shard_file}_{i}.csv.gz" for i in range(chunk_step)]
+                    chunk_smiles = np.array_split(args.pop(prtn_indx), chunk_step)
+                    chunked_args = []
+                    for idx in range(len(chunk_smiles)):
+                        args_copy = copy.deepcopy(args)
+                        args_copy.insert(prtn_indx, chunk_smiles[idx])
+                        chunked_args.append(args_copy)
+                    schemeinfo = [schemeinfo]*chunk_step
+                    rxschemefile = [rxschemefile]*chunk_step
+                    libname = [libname]*chunk_step
+                    rndct = [rndct]*chunk_step
+                    data = list(zip(chunked_args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_names))
+                    #wrapper = library_wrapper(rxschemefile, libname, rndct, schemeinfo)
+                    process.map(library_pipeline, data)
+                    process.close()
+                    process.join()
+                    process.restart() 
 
-
-            def library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct):
-                shard_file_chunk_names = [f"{shard_file}_{i}.csv.gz" for i in range(chunk_step)]
-                if NUM_WORKERS / chunk_step < 1: 
-                    warnings.warn("Not enough threads on the machine, consider reducing the number of chunk steps")
-                process = mp.Pool(NUM_WORKERS)
-                chunk_smiles = np.array_split(args.pop(prtn_indx), NUM_WORKERS)
-                chunked_args = []
-                for idx in range(len(chunk_smiles)):
-                    args_copy = copy.deepcopy(args)
-                    args_copy.insert(prtn_indx, chunk_smiles[idx])
-                    chunked_args.append(args_copy)
-                rxschemefile = [rxschemefile]*chunk_step
-                libname = [libname]*chunk_step
-                rndct = [rndct]*chunk_step
-                breakpoint()
-                schemeinfo = self.ReadRxnScheme(rxschemefile[0], libname[0], False)
-                schemeinfo = [schemeinfo]*chunk_step
-                data = list(zip(chunked_args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_names))
-                breakpoint()
-                #wrapper = library_wrapper(rxschemefile, libname, rndct, schemeinfo)
-                n_enums = process.map(library_pipeline, data)
-                process.terminate()
-                process.join()
-
+                else:
+                    warnings.warn("Not enough building blocks to process in parallel. Processing sequentially.")
+                    shard_file_chunk_name = f"{shard_file}_0.csv.gz"
+                    library_pipeline((args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name))
+                
+            
+            st = time.time()
             
             for shrd_idx, begin_idx in enumerate(range(0, prtn_len, prtn_sze)):
-
-                breakpoint()
-
+                print(shrd_idx)
                 pbar = ProgressBar()
                 pbar.register()
                 shard_file = os.path.join(os.path.dirname(outpath), f"shards/shard_{shrd_idx}")
@@ -635,12 +635,14 @@ class Enumerate:
                     os.makedirs(save_dir)
                 end_idx = min(prtn_len, begin_idx + prtn_sze)
                 args = [bdfs[i][begin_idx: end_idx] if i==prtn_indx else bdfs[i] for i in range(len(bdfs))]
-                n_enums = library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct)
+                library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct)
                 pbar.unregister()
                 gc.collect()
             
-
+            print("--- %s seconds ---" % (time.time() - st))
+            
             breakpoint()
+
 
             if rndct == -1 :
                 hdrs = []
