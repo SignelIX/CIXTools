@@ -440,7 +440,12 @@ class Enumerate:
             df =  df.append (dp_list)
             df.to_csv (dp_outfile)
 
-    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True):
+    def enumerate_library_strux(
+        self, libname, rxschemefile, infilelist, outpath,
+        rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True,
+        prtn_indx=2, prtn_step=5, chunk_step=4):
+
+        
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
@@ -598,16 +603,11 @@ class Enumerate:
 
             bdfs = [x.head(30) for x in bdfs]
 
-            prtn_indx = 2
-            prtn_step = 5
-            chunk_step = 4
-
             prtn_len = len(bdfs[prtn_indx])
             prtn_sze = prtn_len // prtn_step
             
             st = time.time()
             
-            """
             for shrd_idx, begin_idx in enumerate(range(0, prtn_len, prtn_sze)):
                 print(shrd_idx)
                 pbar = ProgressBar()
@@ -621,12 +621,10 @@ class Enumerate:
                 library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct)
                 pbar.unregister()
                 gc.collect()
-            
+    
+
             print("--- %s seconds ---" % (time.time() - st))
             
-            breakpoint()
-
-
             if rndct == -1 :
                 hdrs = []
                 for ix in range(0, cycct):
@@ -675,6 +673,7 @@ class Enumerate:
         return outpath
 
     def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True):
+        
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
 
             reslist = []
@@ -704,6 +703,7 @@ class Enumerate:
                 return 'FAIL'
 
             return res
+
         def processchunk (resdf, df, outpath):
 
             pbar = ProgressBar()
@@ -753,6 +753,7 @@ class Enumerate:
                     f.write(hdrstr +',full_smiles')
                     f.write ('\n')
                     f.close()
+
 
         if type (enum_in) is str:
             reader = pd.read_csv(enum_in, chunksize=chksz)
@@ -807,9 +808,15 @@ class Enumerate:
             return ''
         return infilelist
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True):
+    def EnumFromBBFiles(
+        self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, 
+        picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True,
+        prtn_indx = 2, prtn_step = 5, chunk_step = 4
+    ):
+
         infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
         print (infilelist)
+
         if rxschemefile is None:
             rxschemefile = inpath + 'RxnSchemes.json'
 
@@ -823,7 +830,12 @@ class Enumerate:
 
         if returndf is True:
             outpath = None
-        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums)
+
+        outfile = self.enumerate_library_strux(
+            libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, 
+            SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums,
+            prtn_indx=prtn_indx, prtn_step=prtn_step, chunk_step=chunk_step)
+
         return outfile
 
     def FilterBBs(self, bbdict, filterfile):
@@ -1332,20 +1344,33 @@ class EnumerationCLI :
 
         paramdefaults = [ ('rxnschemefile', './RxnSchemes.json'), ('schemepath','.'), ('scheme',''), ('schemespec',''), ('numstrux', 5000), ('removedups', False)]
         parser = argparse.ArgumentParser(description='Enumeration Options')
+        parser.add_argument('-bl', '--block', nargs='?', default=3, type=int,
+                            help='Remove duplicate structures (True/False)')
+        parser.add_argument('-cs', '--chunkstep', nargs='?', default=4, type=int, 
+                            help='Number of chunks used for parallelization')
+        parser.add_argument('-n', '--numstrux', nargs='?', default=None, type=int, 
+                            help='number of structures to enumerate (-1 for all)')
         parser.add_argument('-p', '--paramfile', nargs='?', default=None, type=str,
                             help='optional .yaml file for commandline paramaters')
+        parser.add_argument('-pi', '--partitionindex', nargs='?', default=2, type=int, 
+                            help='Index of files in list to partition')
+        parser.add_argument('-ps', '--partitionstep', nargs='?', default=5, type=int, 
+                            help='Number of partitions of data')
         parser.add_argument('-r', '--rxnschemefile', nargs='?', default=None, type=str,
                             help='Rxnschemes.json file path')
-        parser.add_argument('-sp', '--schemepath', nargs='?', default=None, type=str, help='Enumerations folder path')
-        parser.add_argument('-s', '--scheme', nargs='?', default=None, type=str, help='Scheme Name')
-        parser.add_argument('-sx', '--schemespec', nargs='?', default=None, type=str, help='sub-scheme Specifier')
-        parser.add_argument('-n', '--numstrux', nargs='?', default=None, type=int,
-                            help='number of structures to enumerate (-1 for all)')
         parser.add_argument('-rd', '--removedups', nargs='?', default=None, type=str,
                             help='Remove duplicate structures (True/False)')
+        parser.add_argument('-s', '--scheme', nargs='?', default=None, type=str, 
+                            help='Scheme Name')
+        parser.add_argument('-sp', '--schemepath', nargs='?', default=None, type=str, 
+                            help='Enumerations folder path')
+        parser.add_argument('-sx', '--schemespec', nargs='?', default=None, type=str, 
+                            help='sub-scheme Specifier')
         parser.add_argument('-wfe', '--write_fails_enums', nargs='?', default=None, type=str,
                             help='Write Fails and Enumerated Molecules in separate files (True/False)')
         args = vars(parser.parse_args())
+
+        start_time = time.time()
 
         if args['paramfile'] is not None:
             with open(args['paramfile'], 'r') as stream:
@@ -1391,11 +1416,15 @@ class EnumerationCLI :
 
         enum = Enumerate()
         print ('Starting Enumeration')
-        outf = enum.EnumFromBBFiles(args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'],
-                             args['scheme'] + addspec, args['numstrux'],
-                             args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums)
+        outf = enum.EnumFromBBFiles(
+            args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'], args['scheme'] + addspec, args['numstrux'], args['rxnschemefile'], 
+            SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums, 
+            prtn_indx=args["partitionindex"], prtn_step=args["partitionstep"], chunk_step=args["chunkstep"])
+
         print ('output prefix', outf)
         print('End Enumeration')
+
+        print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__=="__main__":
