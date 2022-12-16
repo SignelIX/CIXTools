@@ -601,76 +601,37 @@ class Enumerate:
 
             appendmode = False
 
-            bdfs = [x.head(30) for x in bdfs]
+            shards_dir = os.path.join(os.path.dirname(outpath), f"shards")
+            if not os.path.exists(shards_dir):
+                os.makedirs(shards_dir) 
+
+            if rndct != -1:
+                assert(fullct > 0)
+                nmbr_per_cmpnd = rndct ** (1/3)
+                nmbr_per_cmpnd = math.ceil(nmbr_per_cmpnd)
+                bdfs = [data.sample(frac=1) for data in bdfs]
+                for idx in range(cycct):
+                    if len(bdfs[idx]) < nmbr_per_cmpnd:
+                        warnings.warn(f"Building block {str(idx + 1)} has fewer compounds than expected. Using all of the compounds.")
+                    else:
+                        bdfs[idx] = bdfs[idx].head(nmbr_per_cmpnd)
 
             prtn_len = len(bdfs[prtn_indx])
             prtn_sze = prtn_len // prtn_step
-            
-            st = time.time()
-            
+
             for shrd_idx, begin_idx in enumerate(range(0, prtn_len, prtn_sze)):
-                print(shrd_idx)
+                print(f"Running shard # {shrd_idx}")
                 pbar = ProgressBar()
                 pbar.register()
-                shard_file = os.path.join(os.path.dirname(outpath), f"shards/shard_{shrd_idx}")
-                save_dir = os.path.dirname(shard_file) 
-                if not os.path.exists(save_dir): 
-                    os.makedirs(save_dir)
+                shard_file = os.path.join(shards_dir, f"shard_{shrd_idx}")
                 end_idx = min(prtn_len, begin_idx + prtn_sze)
                 args = [bdfs[i][begin_idx: end_idx] if i==prtn_indx else bdfs[i] for i in range(len(bdfs))]
                 library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct)
                 pbar.unregister()
                 gc.collect()
-    
 
-            print("--- %s seconds ---" % (time.time() - st))
-            
-            if rndct == -1 :
-                hdrs = []
-                for ix in range(0, cycct):
-                    hdrs.append('bb' + str(ix + 1))
-                    hdrs.append('bb' + str(ix + 1) + '_smiles')
-                with open(outpath + ".EnumList.csv", "w") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(hdrs)
-                rec_bbpull (bdfs, 0, cycct, [], 0, None, fullct, hdrs, appendmode = appendmode)
-            else:
-                reslist = [[]] * min(rndct, chksz)
-                ct = 0
-                currct = 0
+        return shards_dir
 
-
-                while ct < rndct:
-                    bblist = []
-                    for ix in range (0, cycct):
-                        ri = random.randint (0, len (cycdict['BB' + str (ix + 1)]))
-                        b = cycdict['BB' + str (ix + 1)].iloc[ri]
-                        bb = b['BB_ID']
-                        bbs = b['SMILES']
-                        bblist.append (bb)
-                        bblist.append (bbs)
-                    if bblist not in reslist:
-                        reslist[currct] = bblist
-                        ct += 1
-                        currct += 1
-                        if ct % 1000 == 0:
-                            print(ct, '/', fullct, end='\r')
-                        if currct ==  chksz  or ct == rndct:
-                            enum_in = pd.DataFrame(reslist, columns=hdrs)
-
-                            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode)
-                            reslist = [[]] * min (chksz, rndct - ct)
-                            currct = 0
-                            appendmode = True
-
-        else:
-            resdf = infilelist
-            enum_in = resdf
-            hdrs = None
-            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
-                                        removeduplicateproducts, appendmode = False, write_fails_enums=write_fails_enums)
-
-        return outpath
 
     def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True):
         
