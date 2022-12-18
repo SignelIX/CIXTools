@@ -527,7 +527,6 @@ class Diversity:
                 return None
             dfmode = True
         else:
-            print (inlist)
             if (type(inlist[0]) == str):
                 slist = inlist
             else:
@@ -657,7 +656,7 @@ class Similarity:
                 bbdict [k]['clustnum'] = k_means.labels_
                 bbdict [k].to_csv (path + '/' + libname + '/BBLists/' +libname + '.'  + k + '.clust.csv')
         return
-    def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None):
+    def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None, addtlcols=None):
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
         reslist = []
         for idx, row in comp_bbdf.iterrows ():
@@ -667,7 +666,13 @@ class Similarity:
             else:
                 comp_dummyscaff = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, compsmiles, rxtntnum)
                 tnm = self.TanimotoComparison(dummyscaff, comp_dummyscaff)
-                reslist.append ([row ['BB_ID'],  tnm, row ['SMILES']])
+                if addtlcols is not None:
+                    newrow = [row['BB_ID'], tnm, row['SMILES']]
+                    for c in addtlcols:
+                        newrow.append (row [c])
+                    reslist.append(newrow)
+                else:
+                    reslist.append ([row ['BB_ID'],  tnm, row ['SMILES']])
         reslist = sorted(reslist, key=operator.itemgetter(1), reverse=True)
 
         if excludelist is None:
@@ -922,7 +927,8 @@ class Similarity:
 
 class Chem_Similarity_DiversityUI:
     initpath = '../CIxTools.init.json'
-    paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles', 'bbsim_inputfile', 'bbsim_inputsmiles', 'bbsim_rxnschemefile','bbsim_schemename', 'bbsim_rxtntnum', 'bbsim_retct', 'bbsim_filtcol', 'bbsim_filtvals']
+    paramslist = ['simdiv_inputfile', 'simdiv_inputsmiles', 'bbsim_inputfile', 'bbsim_inputsmiles', 'bbsim_rxnschemefile','bbsim_schemename',
+                  'bbsim_rxtntnum', 'bbsim_retct', 'bbsim_filtcol', 'bbsim_filtvals', 'bbsim_addtlcols', 'bbsim_savetofldr']
     sim = Similarity ()
 
     def __init__ (self):
@@ -968,28 +974,9 @@ class Chem_Similarity_DiversityUI:
         sep = st.selectbox(label='Delimiter', options=['COMMA', 'TAB'], index=0)
         filtercol = st.text_input(label='filtcol', key='bbsim_filtcol', on_change=self.SaveToInit)
         filtvals = st.text_input(label='filtvals (; separated)', key='bbsim_filtvals', on_change=self.SaveToInit)
-        gb = GridOptionsBuilder ()
-        gb.configure_default_column(groupable=True,
-                                    value=True,
-                                    enableRowGroup=True,
-                                    editable=True,
-                                    enableRangeSelection=True,
-                                    )
-        # Column configs
-        gb.configure_column("BB_ID",
-                            headerName="BB ID",
-                            width=100)
-        gb.configure_column("SIMILARITY",
-                            headerName="Similarity",
-                            type=["numericColumn", "numberColumnFilter"],
-                            width=50)
-        gb.configure_column("SMILES",
-                            headerName="SMILES",
-                            width=50)
-        gb.configure_column("search_smiles",
-                            headerName="search_smiles",
-                            width=50)
-        gridOptions = gb.build()
+        addtlcols = st.text_input(label='addtlcols(; separated)', key='bbsim_addtlcols', on_change=self.SaveToInit)
+        savetofldr = st.text_input(label='savetofldr', key='bbsim_savetofldr', on_change=self.SaveToInit)
+
         if st.button(label='Run BB Similarity (smiles v. file)'):
             with st.spinner('Running BB Similarity'):
                 outpath = inputfile.replace('.csv', '') + '.simrun.csv'
@@ -999,28 +986,48 @@ class Chem_Similarity_DiversityUI:
                     sep = ','
                 comp_bbdf = pd.read_csv (inputfile)
                 filtvalsplit = filtvals.split(';')
+                addtlcolssplit = addtlcols.split(';')
                 comp_bbdf=comp_bbdf[comp_bbdf[filtercol].isin( filtvalsplit)]
                 smilessplit = smiles.split (';')
                 outdf = None
                 for s in smilessplit:
-                    if outdf is not None:
-                        excludelist = list(outdf['BB_ID'])
-                    else:
-                        excludelist = None
+                    # if outdf is not None:
+                    #     excludelist = list(outdf['BB_ID'])
+                    # else:
+                    excludelist = None
 
-                    res = self.sim.Find_MostSimilarBB(s, comp_bbdf, rxnschemefile, schemename, int(rxtntnum), int(retct), excludelist=excludelist)
-                    resdf = pd.DataFrame (res, columns = ['BB_ID', 'SIMILARITY',  'SMILES'])
+                    res = self.sim.Find_MostSimilarBB(s, comp_bbdf, rxnschemefile, schemename, int(rxtntnum), int(retct), excludelist=excludelist, addtlcols= addtlcolssplit)
+                    cols = ['BB_ID', 'SIMILARITY',  'SMILES']
+
+                    for c in addtlcolssplit:
+                        cols.append(c)
+                    print (cols)
+                    resdf = pd.DataFrame (res, columns = cols)
                     resdf ['search_smiles'] = s
                     if outdf is None:
                         outdf = resdf
                     else:
                         outdf = outdf.append(resdf)
+
+
                 st.session_state['aggriddata'] = outdf
-                print (outdf)
-                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions, )
+
+                gb = GridOptionsBuilder()
+                gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, editable=True,enableRangeSelection=True, )
+                gb.configure_column("BB_ID", headerName="BB ID", width=100)
+                gb.configure_column("SIMILARITY", headerName="Similarity", type=["numericColumn", "numberColumnFilter"],width=50)
+                gb.configure_column("SMILES", headerName="SMILES", width=50)
+                gb.configure_column("search_smiles", headerName="search_smiles", width=50)
+                for c in addtlcolssplit:
+                    gb.configure_column(c, headerName=c, width=50)
+                gridOptions = gb.build()
+                st.session_state['gridOptions'] = gridOptions
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions )
+                if savetofldr is not None:
+                    outdf.to_csv(savetofldr + '/' + schemename + '_' + str(rxtntnum) + '.csv', index = False)
         else:
             if 'aggriddata' in  st.session_state:
-                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions,)
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=st.session_state['gridOptions'],)
 
 
     def SaveToInit(self):
