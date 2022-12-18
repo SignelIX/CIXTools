@@ -478,6 +478,7 @@ class Enumerate:
             SMILEScolnames = []
         if BBIDcolnames is None:
             BBIDcolnames = []
+
         infilelist.sort ()
         cycct = len (infilelist)
 
@@ -666,15 +667,17 @@ class Enumerate:
         df.to_csv(outpath + '.' + outsuff + '.all.dedup.csv')
         return outpath + '.' + outsuff + '.all.dedup.csv'
 
-    def Get_BBFiles (self, bbspec, libspec, inpath, libname   ):
+    def Get_BBFiles (self, bb_specialcode, lib_subfolder, enumsfolder, libname):
         libspecprefix = ''
-        if libspec != '' and libspec is not None:
-            libspecprefix = '/' + libspec
-        bbpath = inpath + libname + libspecprefix + '/BBLists'
-        if bbspec is not None and bbspec != '':
-            flist = pathlib.Path(bbpath).glob('*' + bbspec + '*.csv')
+        if lib_subfolder != '' and lib_subfolder is not None:
+            libspecprefix = '/' + lib_subfolder
+        bbpath = enumsfolder + libname + libspecprefix + '/BBLists'
+        if bb_specialcode is not None and bb_specialcode != '':
+            srchstr = '*' + bb_specialcode + '*.csv'
+            flist = pathlib.Path(bbpath).glob(srchstr)
         else:
-            flist = pathlib.Path(bbpath).glob('*.csv')
+            srchstr = '*.csv'
+            flist = pathlib.Path(bbpath).glob(srchstr)
         infilelist = []
 
         for f in flist:
@@ -685,23 +688,27 @@ class Enumerate:
                 infilelist.append(c)
         infilelist.sort()
         if len(infilelist) == 0:
-            print('FAIL: No BB files found with format ' + '*.' + bbspec + '.BB[x].csv found in ' + bbpath, infilelist)
+            print('FAIL: No BB files found with format ' + srchstr.replace ('*.csv', '*.BB[x].csv') + ' found in ' + bbpath, infilelist)
+            print ('Inputs:BBcode:' , bb_specialcode, ' lib_subfldr:', lib_subfolder, ' enum folder:', enumsfolder, ' lib:', libname)
             return ''
         return infilelist
 
-    def EnumFromBBFiles(self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True):
-        infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
-        print (infilelist)
-        if rxschemefile is None:
-            rxschemefile = inpath + 'RxnSchemes.json'
+    def EnumFromBBFiles(self, libname, bb_specialcode, out_specialcode, enumsfolder, lib_subfolder, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True):
 
-        samplespath = inpath + foldername + '/Samples/'
+        infilelist = self.Get_BBFiles (bb_specialcode, lib_subfolder, enumsfolder, libname)
+        if type (infilelist) == str:
+            return
+
+        if rxschemefile is None:
+            rxschemefile = enumsfolder + 'RxnSchemes.json'
+
+        samplespath = enumsfolder  + libname + '/' + lib_subfolder + '/Samples/'
         print ('SAMPLESPATH', samplespath)
         if not os.path.exists(samplespath):
             os.makedirs(samplespath)
-        outpath = inpath + foldername + '/Samples/' + libname
-        if  outspec != '' and outspec is not None:
-            outpath += '.' + outspec
+        outpath = samplespath + libname
+        if  out_specialcode != '' and out_specialcode is not None:
+            out_specialcode += '.' + out_specialcode
 
         if returndf is True:
             outpath = None
@@ -900,6 +907,7 @@ class EnumerationUI:
                     st.session_state[p] = initjson [p]
                     if p == 'enumerate_rxnscheme':
                         self.enum.named_reactions = self.enum.ReadRxnScheme(st.session_state['enumerate_rxnscheme'],'Named_Reactions', FullInfo=True)[0]
+                        print ('NAMED Rxns:', self.enum.named_reactions )
                 else:
                     st.session_state[p] = ''
 
@@ -1092,11 +1100,9 @@ class EnumerationUI:
             with st.expander(label='Test structure grid', expanded=True):
                 getr100 = st.button(label='get random 100')
                 if getr100:
-                    addspec = ''
-                    if specstr != '' and specstr is not None:
-                        addspec = '/' + specstr
                     with st.spinner('Enumerating'):
-                        resdf = self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec,
+                        print(schemename, specstr, specstr, lspath, specstr, rxnschemefile)
+                        resdf = self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, specstr,
                                                           100, rxnschemefile,
                                                           SMILEScolnames=self.smiles_colnames,
                                                           BBcolnames=self.bbid_colnames,
@@ -1160,11 +1166,8 @@ class EnumerationUI:
                         except:
                             ct = 5000
 
-                        addspec = ''
-                        if specstr != '' and specstr is not None:
-                            addspec = '/' + specstr
-                        print (schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile)
-                        self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath, schemename + addspec, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
+                        print (schemename, specstr, specstr, lspath,  specstr, ct, rxnschemefile)
+                        self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath,  specstr, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
 
 
         if Enumerate == True:
