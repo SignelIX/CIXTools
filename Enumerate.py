@@ -502,7 +502,7 @@ class Enumerate:
         def enumerate_library(args):
             args_nmbr = [len(arg) for arg in args]
             args_perm = [list(range(arg)) for arg in args_nmbr]
-            args_perm =np.array(list(itertools.product(*args_perm)), dtype=np.int8)
+            args_perm = np.array(list(itertools.product(*args_perm)))
             df = []
             for perm in args_perm:
                 bblist = []
@@ -540,8 +540,17 @@ class Enumerate:
             
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
-            if NUM_WORKERS > 1 and len(args[prtn_indx]) >= NUM_WORKERS:
+            actual_chunks = len(args[prtn_indx]) 
+
+            if chunk_step > actual_chunks:
+                chunk_step = actual_chunks
+
+            if NUM_WORKERS > actual_chunks:
+                process = Pool(actual_chunks)
+            else:
                 process = Pool(NUM_WORKERS)
+
+            if NUM_WORKERS > 1:
                 shard_file_chunk_names = [f"{shard_file}_{i}.csv.gz" for i in range(chunk_step)]
                 chunk_smiles = np.array_split(args.pop(prtn_indx), chunk_step)
                 chunked_args = []
