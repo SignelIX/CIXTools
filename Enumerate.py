@@ -612,18 +612,27 @@ class Enumerate:
 
             shards_dir = os.path.join(os.path.dirname(outpath), f"shards")
             if not os.path.exists(shards_dir):
-                os.makedirs(shards_dir) 
+                os.makedirs(shards_dir)
 
             if rndct != -1:
                 assert(fullct > 0)
-                nmbr_per_cmpnd = rndct ** (1/3)
-                nmbr_per_cmpnd = math.ceil(nmbr_per_cmpnd)
                 bdfs = [data.sample(frac=1) for data in bdfs]
-                for idx in range(cycct):
-                    if len(bdfs[idx]) < nmbr_per_cmpnd:
-                        warnings.warn(f"Building block {str(idx + 1)} has fewer compounds than expected. Using all of the compounds.")
+                nmbr_rqrd_bb = math.ceil(rndct ** (1/cycct))
+                curr_ct = 1
+                for idx in list(range(cycct)):
+                    nmbr_per_bb = len(bdfs[idx])
+                    if nmbr_per_bb < nmbr_rqrd_bb: 
+                        warnings.warn(f"Building block {idx+1} has fewer compounds than expected. Using all of the compounds.")
+                        curr_ct *= nmbr_per_bb
+                        nmbr_rqrd_bb = rndct/curr_ct
+                        if not idx==cycct-1:
+                            nmbr_rqrd_bb = nmbr_rqrd_bb ** (1/(cycct-1))
+                        nmbr_rqrd_bb = math.ceil(nmbr_rqrd_bb)
                     else:
-                        bdfs[idx] = bdfs[idx].head(nmbr_per_cmpnd)
+                        bdfs[idx] = bdfs[idx].head(nmbr_rqrd_bb)
+                        curr_ct *= nmbr_per_bb   
+                test_fullct = math.prod([len(d) for d in bdfs])
+                warnings.warn(f"Actual total number of compounds iterating {test_fullct}.")
 
             prtn_len = len(bdfs[prtn_indx])
             prtn_sze = prtn_len // prtn_step
