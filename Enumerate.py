@@ -441,9 +441,10 @@ class Enumerate:
             df.to_csv (dp_outfile)
 
     def enumerate_library_strux(
-        self, libname, rxschemefile, infilelist, outpath,
-        rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True,
-        prtn_indx=2, prtn_step=5, chunk_step=4):
+        self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], 
+        removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True, prtn_indx=2, prtn_step=5, 
+        chunk_step=4, bbid="BB_ID", bbsmiles="SMILES"
+        ):
 
         
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
@@ -499,7 +500,7 @@ class Enumerate:
             return res
 
 
-        def enumerate_library(args):
+        def enumerate_library(args, bbid="BB_ID", bbsmiles="CSMILES"):
             args_nmbr = [len(arg) for arg in args]
             args_perm = [list(range(arg)) for arg in args_nmbr]
             args_perm = np.array(list(itertools.product(*args_perm)))
@@ -508,10 +509,8 @@ class Enumerate:
                 bblist = []
                 for idx in range(len(args)):
                     data = args[idx].iloc[perm[idx]]
-                    bb = data["BB_ID"]
-                    bbs = data["SMILES"]
-                    bblist.append(bb)
-                    bblist.append(bbs)
+                    bblist.append(data[bbid])
+                    bblist.append(data[bbsmiles])
                 df.append(bblist)
             df = pd.DataFrame(df)
             columns = [["bb"+str(ix+1), "bb" + str(ix + 1) + "_smiles"] for ix in range(len(args))]
@@ -522,21 +521,21 @@ class Enumerate:
 
 
         def library_pipeline(tuple_args):
-            args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name = tuple_args
-            library_df = enumerate_library(args)
+            args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name, bbid, bbsmiles= tuple_args
+            library_df = enumerate_library(args, bbid, bbsmiles)
             result = library_df.apply(
                 oldtaskfcn, 
                 axis=1, 
                 result_type="expand", 
                 args=(libname, rxschemefile, rndct == 1, schemeinfo, len(args))
-            )
+                )
             result = pd.DataFrame(result).rename(columns={0: "full_smiles"})
             library_ids = ["bb"+str(ix+1) for ix in range(len(args))]
             result.index = library_df[library_ids].apply(lambda r: '_'.join(r), axis=1).tolist()
             result.to_csv(shard_file_chunk_name)
 
 
-        def library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct):
+        def library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct, bbid, bbsmiles):
             
             schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
 
@@ -562,8 +561,9 @@ class Enumerate:
                 rxschemefile = [rxschemefile]*chunk_step
                 libname = [libname]*chunk_step
                 rndct = [rndct]*chunk_step
-                data = list(zip(chunked_args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_names))
-                #wrapper = library_wrapper(rxschemefile, libname, rndct, schemeinfo)
+                bbid = [bbid]*chunk_step
+                bbsmiles = [bbsmiles]*chunk_step
+                data = list(zip(chunked_args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_names, bbid, bbsmiles))
                 process.map(library_pipeline, data)
                 process.close()
                 process.join()
@@ -572,7 +572,7 @@ class Enumerate:
             else:
                 warnings.warn("Not enough building blocks to process in parallel. Processing sequentially.")
                 shard_file_chunk_name = f"{shard_file}_0.csv.gz"
-                library_pipeline((args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name))
+                library_pipeline((args, rxschemefile, libname, rndct, schemeinfo, shard_file_chunk_name, bbid, bbsmiles))
             
    
         if SMILEScolnames is None:
@@ -583,7 +583,8 @@ class Enumerate:
         cycct = len (infilelist)
 
         if type(infilelist) is list:
-            cycdict = self.load_BBlists(infilelist, BBIDcolnames, SMILEScolnames)
+
+            cycdict = self.load_BBlists(infilelist)
 
             bdfs = [None] * cycct
             if bblistfile is not None:
@@ -644,7 +645,7 @@ class Enumerate:
                 shard_file = os.path.join(shards_dir, f"shard_{shrd_idx}")
                 end_idx = min(prtn_len, begin_idx + prtn_sze)
                 args = [bdfs[i][begin_idx: end_idx] if i==prtn_indx else bdfs[i] for i in range(len(bdfs))]
-                library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct)
+                library_partition(args, shard_file, prtn_indx, chunk_step, rxschemefile, libname, rndct,  bbid, bbsmiles)
                 pbar.unregister()
                 gc.collect()
 
@@ -790,7 +791,7 @@ class Enumerate:
     def EnumFromBBFiles(
         self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, 
         picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True,
-        prtn_indx = 2, prtn_step = 5, chunk_step = 4
+        prtn_indx = 2, prtn_step = 5, chunk_step = 4, bbid="BB_ID", bbsmiles="SMILES"
     ):
 
         infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
@@ -813,7 +814,7 @@ class Enumerate:
         outfile = self.enumerate_library_strux(
             libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, 
             SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums,
-            prtn_indx=prtn_indx, prtn_step=prtn_step, chunk_step=chunk_step)
+            prtn_indx=prtn_indx, prtn_step=prtn_step, chunk_step=chunk_step, bbid=bbid, bbsmiles=bbsmiles)
 
         return outfile
 
@@ -914,23 +915,24 @@ class Enumerate:
             else:
                 cdf.to_csv(outpath + '/' + libname + '.' + names_dict[ln] + '.csv', index=False)
 
-    def load_BBlists(self, bblists, BBIDcolnames= [], SMILEScolnames = []):
-        cycs = []
-        bbdict = {}
 
-        if type (bblists) is dict:
-            bbdict = bblists
-        else:
-            for l in bblists:
-                cyclesplit = l.split('.')
-                cyc = cyclesplit[len(cyclesplit) - 2]
-                cycs.append(cyc)
-                if type(l) is str:
-                    if '.' not in l:
-                        bbdict [cyc] = None
-                    else:
-                        bbdict[cyc] = pd.read_csv(l)
+    def load_BBlists(self, bblists):
+        if isinstance(bblists, dict):
+            return bblists
+        cycs, bbdict = [], {}
+        for l in bblists:
+            cyclesplit = l.split('.')
+            cyc = cyclesplit[len(cyclesplit) - 2]
+            cycs.append(cyc)
+            if isinstance(l, str):
+                if '.' not in l:
+                    bbdict [cyc] = None
+                else:
+                    bbdict[cyc] = pd.read_csv(l)
+        return bbdict
 
+
+    def rename_BBdict(self, bbdict, BBIDcolnames= [], SMILEScolnames = []):
         for cyc in bbdict.keys():
             if bbdict [cyc] is not None:
                 changecoldict = {}
@@ -946,6 +948,7 @@ class Enumerate:
                     bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
                 bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first").reset_index(drop=True)
         return bbdict
+
 
     def pull_BBs(self, inpath, idcol, smilescol):
         globlist = pathlib.Path(inpath).glob('*.csv')
@@ -1039,7 +1042,8 @@ class EnumerationUI:
                 if 'df' + str(k) not in st.session_state:
                     do_reload = True
         if do_reload:
-            dfs = self.enum.load_BBlists (bbfiles.values (), self.bbid_colnames, self.smiles_colnames)
+            dfs = self.enum.load_BBlists (bbfiles.values())
+            dfs = self.enum.rename_BBdict(dfs, self.bbid_colnames, self.smiles_colnames)
             for k in dfs.keys ():
                 st.session_state['df' + str(k)] = dfs[k]
         else:
@@ -1319,10 +1323,14 @@ class EnumerationUI:
 
 class EnumerationCLI :
     @staticmethod
-    def Run_CLI (SMILEScolnames = None, BBcolnames = None):
+    def Run_CLI ():
 
         paramdefaults = [ ('rxnschemefile', './RxnSchemes.json'), ('schemepath','.'), ('scheme',''), ('schemespec',''), ('numstrux', 5000), ('removedups', False)]
         parser = argparse.ArgumentParser(description='Enumeration Options')
+        parser.add_argument('-bbi', '--bbid', nargs='?', default="BB_ID", type=str, 
+                            help='Name of column in CSV containing id of each building block')
+        parser.add_argument('-bbs', '--bbsmiles', nargs='?', default="SMILES", type=str, 
+                            help='Name of column in CSV containing smiles representation for each building block')
         parser.add_argument('-bl', '--block', nargs='?', default=3, type=int,
                             help='Remove duplicate structures (True/False)')
         parser.add_argument('-cs', '--chunkstep', nargs='?', default=4, type=int, 
@@ -1397,8 +1405,9 @@ class EnumerationCLI :
         print ('Starting Enumeration')
         outf = enum.EnumFromBBFiles(
             args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'], args['scheme'] + addspec, args['numstrux'], args['rxnschemefile'], 
-            SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums, 
-            prtn_indx=args["partitionindex"], prtn_step=args["partitionstep"], chunk_step=args["chunkstep"])
+            rem_dups=rd, write_fails_enums=write_fails_enums, prtn_indx=args["partitionindex"], prtn_step=args["partitionstep"], chunk_step=args["chunkstep"],
+            bbid=args["bbid"], bbsmiles=args["bbsmiles"]
+            )
 
         print ('output prefix', outf)
         print('End Enumeration')
