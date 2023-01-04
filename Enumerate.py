@@ -611,7 +611,7 @@ class Enumerate:
 
             appendmode = False
 
-            shards_dir = os.path.join(os.path.dirname(outpath), f"shards")
+            shards_dir = os.path.join(outpath, f"shards")
             if not os.path.exists(shards_dir):
                 os.makedirs(shards_dir)
 
@@ -791,7 +791,7 @@ class Enumerate:
     def EnumFromBBFiles(
         self, libname, bbspec, outspec, inpath, foldername, num_strux, rxschemefile, 
         picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True,
-        prtn_indx = 2, prtn_step = 5, chunk_step = 4, bbid="BB_ID", bbsmiles="SMILES"
+        prtn_indx = 2, prtn_step = 5, chunk_step = 4, bbid="BB_ID", bbsmiles="SMILES", outpath=None
     ):
 
         infilelist = self.Get_BBFiles (bbspec, outspec, inpath, libname)
@@ -804,9 +804,11 @@ class Enumerate:
         print ('SAMPLESPATH', samplespath)
         if not os.path.exists(samplespath):
             os.makedirs(samplespath)
-        outpath = inpath + foldername + '/Samples/' + libname
-        if  outspec != '' and outspec is not None:
-            outpath += '.' + outspec
+
+        if outpath is None:
+            outpath = inpath + foldername + '/Samples/'
+            if  outspec != '' and outspec is not None:
+                outpath += '.' + outspec
 
         if returndf is True:
             outpath = None
@@ -1337,6 +1339,8 @@ class EnumerationCLI :
                             help='Number of chunks used for parallelization')
         parser.add_argument('-n', '--numstrux', nargs='?', default=None, type=int, 
                             help='number of structures to enumerate (-1 for all)')
+        parser.add_argument('-o', '--opath', nargs='?', default=None, type=str, 
+                    help='outpath directory to save results')
         parser.add_argument('-p', '--paramfile', nargs='?', default=None, type=str,
                             help='optional .yaml file for commandline paramaters')
         parser.add_argument('-pi', '--partitionindex', nargs='?', default=2, type=int, 
@@ -1406,7 +1410,7 @@ class EnumerationCLI :
         outf = enum.EnumFromBBFiles(
             args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'], args['scheme'] + addspec, args['numstrux'], args['rxnschemefile'], 
             rem_dups=rd, write_fails_enums=write_fails_enums, prtn_indx=args["partitionindex"], prtn_step=args["partitionstep"], chunk_step=args["chunkstep"],
-            bbid=args["bbid"], bbsmiles=args["bbsmiles"]
+            bbid=args["bbid"], bbsmiles=args["bbsmiles"], outpath=args["opath"]
             )
 
         print ('output prefix', outf)
