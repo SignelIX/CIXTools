@@ -27,6 +27,7 @@ from st_aggrid import AgGrid
 from st_aggrid.grid_options_builder import  GridOptionsBuilder
 from st_aggrid import GridUpdateMode, DataReturnMode
 import MolDisplay
+from streamlit import runtime
 
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
@@ -587,7 +588,6 @@ class Similarity:
     def PrepBBs(self, bbdict, libname, rxnschemefile, sim_column='dummy_smiles'):
         scheme, rxtnts = self.enum.ReadRxnScheme(rxnschemefile, libname, FullInfo=True)
         dummyrxtnts = scheme['scaffold_dummy_structures']
-        #self.enum.RunRxnScheme(dummyrxtnts, rxnschemefile, libname, False)
         cycs = []
         for cyc in bbdict.keys():
             cycs.append(cyc)
@@ -599,11 +599,7 @@ class Similarity:
                 rxtnts = copy.deepcopy(dummyrxtnts)
                 for idx, row in tqdm(bbdict[cycs[cx]].iterrows(), total=len(bbdict[cycs[cx]])):
                     rxtnts[cx] = row['SMILES']
-                    # try:
                     res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
-                    # except Exception as e:
-                    #     print (rxtnts)
-                    #     print (e)
 
                     if res[0] != 'FAIL':
                         sdx = Chem.CanonSmiles(res[0])
@@ -1044,7 +1040,7 @@ class Chem_Similarity_DiversityUI:
         self.body (param)
 
 if __name__ == "__main__":
-    if st._is_running_with_streamlit:
+    if runtime.exists():
         if len (sys.argv) == 0:
             csvis = Chem_Similarity_DiversityUI ('Sim Search')
             csvis.RunUI()

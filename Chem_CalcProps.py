@@ -23,21 +23,25 @@ class Chem_CalcProps:
                     rowvals.append ( row[b + '_smiles'])
                 rowvals.append (row[smiles_col]),
                 rowvals.append ([None, None, None, None, None, None, None, None, None, None])
+                res = [None, None, None, None, None, None, None, None, None, None]
             else:
-                mol = Chem.MolFromSmiles(row[smiles_col])
-                TPSA = rdMolDescriptors.CalcTPSA(mol)
-                RBs = rdMolDescriptors.CalcNumRotatableBonds(mol)
-                HBD = rdMolDescriptors.CalcNumHBD(mol)
-                HBA = rdMolDescriptors.CalcNumHBA(mol)
-                AMW = Chem.Descriptors.MolWt(mol)
-                HAC = mol.GetNumHeavyAtoms()
-                SlogP = Chem.Crippen.MolLogP(mol)
-                SP3 = Chem.Lipinski.FractionCSP3(mol)
-                ExactMW = rdMolDescriptors.CalcExactMolWt(mol)
-                CSMILES = Chem.CanonSmiles(row[smiles_col])
+                try:
+                    mol = Chem.MolFromSmiles(row[smiles_col])
+                    TPSA = rdMolDescriptors.CalcTPSA(mol)
+                    RBs = rdMolDescriptors.CalcNumRotatableBonds(mol)
+                    HBD = rdMolDescriptors.CalcNumHBD(mol)
+                    HBA = rdMolDescriptors.CalcNumHBA(mol)
+                    AMW = Chem.Descriptors.MolWt(mol)
+                    HAC = mol.GetNumHeavyAtoms()
+                    SlogP = Chem.Crippen.MolLogP(mol)
+                    SP3 = Chem.Lipinski.FractionCSP3(mol)
+                    ExactMW = rdMolDescriptors.CalcExactMolWt(mol)
+                    CSMILES = Chem.CanonSmiles(row[smiles_col])
 
-            res = [ round(SlogP, 2), round(TPSA, 2), round (AMW,2), RBs, CSMILES, HBD, HBA, HAC, round(SP3, 2), round(ExactMW, 2)]
-
+                    res = [ round(SlogP, 2), round(TPSA, 2), round (AMW,2), RBs, CSMILES, HBD, HBA, HAC, round(SP3, 2), round(ExactMW, 2)]
+                except:
+                    print ('FAIL: ', row[smiles_col])
+                    res = [None, None, None, None, None, None, None, None, None, None]
             return res
 
         df = pd.read_csv(infile)

@@ -36,6 +36,7 @@ from st_aggrid import AgGrid
 from st_aggrid.grid_options_builder import  GridOptionsBuilder
 from st_aggrid import GridUpdateMode, DataReturnMode
 import numexpr
+from streamlit import runtime
 
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
@@ -734,32 +735,55 @@ class Enumerate:
             bbdict[dx].drop(removeidxs[dx], axis=0, inplace=True)
         return bbdict
 
-    def generate_BBlists(self, inpath, outpath, libname, rxnschemefile):
-        def PassFilters(input_mol, filters_dict, filtname):
-            filters = filters_dict[filtname]
-            incl_list = filters['include']
-            if 'exclude' in filters:
-                excl_list = filters['exclude']
-            else:
-                excl_list = []
-            for ifl in incl_list:
-                if type(ifl) == list:
-                    hassub = False
-                    for orx in ifl:
-                        pattern = Chem.MolFromSmarts(orx)
-                        if (input_mol.HasSubstructMatch(pattern) == True):
-                            hassub = True
-                    if hassub == False:
-                        return False
-                else:
-                    pattern = Chem.MolFromSmarts(ifl)
-                    if (input_mol.HasSubstructMatch(pattern) == False):
-                        return False
-            for efl in excl_list:
-                pattern = Chem.MolFromSmarts(efl)
-                if (input_mol.HasSubstructMatch(pattern) == True):
+    def Get_MoleculesFromSMARTSFilters (self, infile, outfile, inclSMARTS, exclSMARTS ):
+        df = pd.read_csv (infile)
+        keep_idxs = []
+        filters_dict = {}
+        filtername = 'f1'
+        filters_dict [filtername] ={}
+        if inclSMARTS is None:
+            inclSMARTS = []
+        filters_dict[filtername]['include'] = inclSMARTS
+        if exclSMARTS is None:
+            exclSMARTS = []
+        filters_dict[filtername]['exclude'] = exclSMARTS
+        for idx, row in df.iterrows ():
+            input_mol = Chem.MolFromSMILES (row ['SMILES'])
+            if (self.PassFilters(input_mol, filters_dict, filtername)):
+                keep_idxs.append(idx)
+        df = df.iloc [keep_idxs].reset_index ()
+        print (df)
+        df.to_csv (outfile)
+
+
+    def PassFilters(self, input_mol, filters_dict, filtname):
+        filters = filters_dict[filtname]
+        incl_list = filters['include']
+        if 'exclude' in filters:
+            excl_list = filters['exclude']
+        else:
+            excl_list = []
+        for ifl in incl_list:
+            if type(ifl) == list:
+                hassub = False
+                for orx in ifl:
+                    pattern = Chem.MolFromSmarts(orx)
+                    if (input_mol.HasSubstructMatch(pattern) == True):
+                        hassub = True
+                if hassub == False:
                     return False
-            return True
+            else:
+                pattern = Chem.MolFromSmarts(ifl)
+                if (input_mol.HasSubstructMatch(pattern) == False):
+                    return False
+        for efl in excl_list:
+            pattern = Chem.MolFromSmarts(efl)
+            if (input_mol.HasSubstructMatch(pattern) == True):
+                return False
+        return True
+
+    def generate_BBlists(self, inpath, outpath, libname, rxnschemefile):
+
 
         f = open(rxnschemefile)
         data = json.load(f)
@@ -796,7 +820,7 @@ class Enumerate:
                 input_mol = None
             if input_mol is not None:
                 for ln in listnames:
-                    if PassFilters(input_mol, filters_dict, ln):
+                    if self.PassFilters(input_mol, filters_dict, ln):
                         df.iloc[idx][ln] = 'Y'
                     else:
                         df.iloc[idx][ln] = 'N'
@@ -866,18 +890,22 @@ class Enumerate:
 
     def TestReactionScheme(self,schemename, rxtnts, rxnschemefile, retIntermeds = False):
         res = self.RunRxnScheme(rxtnts, rxnschemefile, schemename, False)
+        rxnslist = []
+        for k in res [2][0]:
+            print ('X:', k)
+            rxnslist.append([str(k['Reactants']) + '<p>' + str(k['Rxns'])])
         if res[1] > 1:
             if not retIntermeds:
                 return 'FAIL--MULTIPLE PRODUCTS'
             else:
-                return 'FAIL--MULTIPLE PRODUCTS', None
+                return 'FAIL--MULTIPLE PRODUCTS', None, None
         if not retIntermeds:
             return res[0]
         else:
             if res [2] is not None:
-                return res[0], res[2][2]
+                return res[0], res[2][2], rxnslist
             else:
-                return res[0], None
+                return res[0], None, None
 
     def Enumerate_Dummy_Scaffold (self, rxnschemefile, schemename, bbsmiles, rxtntnum):
         scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, FullInfo=True)
@@ -1047,6 +1075,7 @@ class EnumerationUI:
                     dfs = []
 
 
+
         with cont3:
             colx1, colx2 = st.columns(2)
             with colx1:
@@ -1148,7 +1177,18 @@ class EnumerationUI:
                 if st.button (label='save scheme'):
                     self.SaveScheme()
             with ccont:
-                st.text_area(height=200, label='Scheme Definition', key='enumerate_lastschemedef')
+                dcol1, dcol2 = st.columns([2,1] )
+                with dcol2:
+                    if st.button (label = 'Add Step'):
+                        print (st.session_state ['enumerate_lastschemedef'])
+                        defjson = json.loads(st.session_state ['enumerate_lastschemedef'] )
+                        stepdict = {}
+                        stepdict ["Reactants"] = []
+                        stepdict["Rxns"] = {'default':''}
+                        defjson ['steps'].append (stepdict)
+                        st.session_state['enumerate_lastschemedef'] = json.dumps (defjson, indent=4)
+                with dcol1:
+                    st.text_area(height=200, label='Scheme Definition', key='enumerate_lastschemedef')
 
         with cont2:
             with st.expander (label='Export'):
@@ -1177,7 +1217,7 @@ class EnumerationUI:
                         st.text('Reactants not correctly loaded')
                     else:
                         try:
-                            res , intermeds= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state ['enumerate_lastschemedef'], True)
+                            res, intermeds, rxninfo= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state ['enumerate_lastschemedef'], True)
                             if res is None or res == 'FAIL' or res.startswith ('FAIL') or res == 'NOSCHEMEFAIL':
                                 st.text ('Reaction Failure: ' + res)
                             else:
@@ -1203,6 +1243,9 @@ class EnumerationUI:
                 with coly2:
                     with st.expander(label='Reaction Products'):
                         st.image(MolDisplay.ShowMols(intermeds, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
+                dispdf = pd.DataFrame ([[rxtnts [0], intermeds[0], rxninfo [0]], [rxtnts [1], intermeds[1], rxninfo [1]], [rxtnts [2], intermeds[2], rxninfo [2]]], columns = ['Reactant', 'Intermediate','RxnInfo'])
+                with st.expander (label='Rxn Info Grid'):
+                    MolDisplay.ShowMols_StreamLit_Grid (dispdf,['Reactant', 'Intermediate'], rowheight = 200 )
 
 
     def RunUI(self):
@@ -1214,7 +1257,6 @@ class EnumerationUI:
 class EnumerationCLI :
     @staticmethod
     def Run_CLI (SMILEScolnames = None, BBcolnames = None):
-
         paramdefaults = [ ('rxnschemefile', './RxnSchemes.json'), ('schemepath','.'), ('scheme',''), ('schemespec',''), ('numstrux', 5000), ('removedups', False)]
         parser = argparse.ArgumentParser(description='Enumeration Options')
         parser.add_argument('-p', '--paramfile', nargs='?', default=None, type=str,
@@ -1284,7 +1326,7 @@ class EnumerationCLI :
 
 
 if __name__=="__main__":
-    if st._is_running_with_streamlit:
+    if runtime.exists ():
         enum = EnumerationUI ()
         enum.RunUI ()
     else:

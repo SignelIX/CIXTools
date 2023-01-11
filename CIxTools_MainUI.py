@@ -3,6 +3,7 @@ import Enumerate
 import Chem_SpaceVisualization as ChSV
 import Chem_CalcProps
 import Chem_Similarity_Diversity
+from streamlit import runtime
 
 
 class CIXTools_MainUI:
@@ -73,6 +74,6 @@ class CIXTools_MainUI:
 
 
 if __name__=="__main__":
-    if st._is_running_with_streamlit:
+    if runtime.exists():
         cim = CIXTools_MainUI()
         cim.RunUI()

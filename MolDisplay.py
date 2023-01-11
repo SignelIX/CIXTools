@@ -5,8 +5,16 @@ import io
 import numpy as np
 from PIL import Image
 import base64
+import streamlit as st
+from st_aggrid import AgGrid, JsCode
+from st_aggrid.grid_options_builder import  GridOptionsBuilder
+from st_aggrid import GridUpdateMode, DataReturnMode
+import sys
+from streamlit import runtime
+import pandas as pd
 
-def ShowMol( smiles):
+
+def ShowMol( smiles, outtype=None):
     if smiles is not None:
         try:
             m = Chem.MolFromSmiles(smiles)
@@ -21,6 +29,15 @@ def ShowMol( smiles):
     img.save('test.png')
     plt.imshow(img)
     plt.show()
+    if outtype == 'b64_datauri':
+        buf = io.BytesIO()
+        img.save(buf, format='png')
+        buf.seek(0)
+        data = buf.read()
+        sb = ''
+        sb += "data:image/png;base64,"
+        sb += base64.b64encode(data).decode('ascii')
+        return sb
     return plt
 
 def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
@@ -59,3 +76,56 @@ def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
             return plt
     else:
         return None
+    
+def ShowMols_StreamLit_Grid (df, smilescols = ['SMILES'], rowheight = 100):
+    dispdf = df
+    for s in smilescols:
+        dispdf [s + '_Image'] = None
+    image_render = JsCode("""function (params) {
+                         this.params = params;
+                         this.img_render = document.createElement('div');
+                         this.img_render.innerHTML = `
+                             <img src=${this.params.value}
+                                 width=""" + str(rowheight) +"""
+                                 height=""" + str(rowheight) +"""
+                             >
+                         `; 
+                         return this.img_render;
+                         }""")
+    gb = GridOptionsBuilder()
+    print(smilescols)
+    for c in df.columns:
+        if c not in smilescols:
+            gb.configure_column(c, headerName=c, width=50)
+        else:
+            print (c)
+            gb.configure_column(c + "_Image", headerName=s, cellRenderer=image_render)
+    for ix, row in dispdf.iterrows():
+        for s in smilescols:
+            dispdf.at [ix,s + '_Image'] =ShowMol(row[s],outtype='b64_datauri')
+
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, editable=True,
+                                enableRangeSelection=True, )
+
+    gridOptions = gb.build()
+    gridOptions['rowHeight'] = rowheight
+
+    AgGrid(dispdf, allow_unsafe_jscode=True, enable_enterprise_modules=True, gridOptions=gridOptions, height=500)
+    return
+
+class Chem_ShowMols_UI:
+    def body(self):
+        df = pd.DataFrame ([['CCCC', 'c1ccccc1', 5], ['CCNC1CCCC1', 'C1=NCC=N1', 10]], columns=['SMILES','SMILES2',  'Test'])
+        st.markdown("""<h1 style='text-align: center; margin-bottom: -35px;'>
+               MolDisplay</h1>""", unsafe_allow_html=True)
+
+        ShowMols_StreamLit_Grid (df, ['SMILES','SMILES2'])
+
+
+    def RunUI(self):
+        self.body()
+
+if __name__ == "__main__":
+    if runtime.exists():
+        csm = Chem_ShowMols_UI()
+        csm.RunUI()

@@ -19,13 +19,16 @@ def SaltStripMolecules (molecules: pd.DataFrame):
     return molecules
 
 def SaltStrip (molec):
-    saltstrip = SaltRemover.SaltRemover()
-    if type(molec) != Chem.Mol:
-        m = Chem.MolFromSmiles(molec)
-    else:
-        m = molec
-    m=  saltstrip.StripMol(m)
-    smi = Chem.MolToSmiles(m, kekuleSmiles = False)
+    try:
+        saltstrip = SaltRemover.SaltRemover()
+        if type(molec) != Chem.Mol:
+            m = Chem.MolFromSmiles(molec)
+        else:
+            m = molec
+        m=  saltstrip.StripMol(m)
+        smi = Chem.MolToSmiles(m, kekuleSmiles = False)
+    except:
+        return molec
     return smi
 
 def Neutralize (smi):
@@ -51,7 +54,6 @@ def Neutralize (smi):
     except:
         print (smi)
         return smi
-
 
 def Kekulize_Smiles (smi):
     m = Chem.MolFromSmiles(smi)
@@ -336,6 +338,15 @@ def Read_FilterFile (filter_file):
         mol = Chem.MolFromSmarts(row['SMILES'])
         ss_filters.loc[idx, 'Molecule'] = mol
     return ss_filters
+
+def SubstructureCheckMolecules (molecules: pd.DataFrame, ss_smarts):
+    passixs = []
+    smartsmol = Chem.MolFromSmarts(ss_smarts)
+    for ix, row in molecules.iterrows ():
+        m=Chem.MolFromSmiles(row['SMILES'])
+        if m is not None and  m.HasSubstructMatch(smartsmol, useChirality=False) == True:
+            passixs.append (ix)
+    return molecules.iloc [passixs].reset_index ()
 
 def Substructure_Filters (input_mol, outfile, ss_filters, useChirality, Keep_IfNoFilter):
     if type (input_mol) == str:
