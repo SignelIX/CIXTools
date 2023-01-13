@@ -436,7 +436,7 @@ class Enumerate:
             df =  df.append (dp_list)
             df.to_csv (dp_outfile)
 
-    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True):
+    def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True, retIntermeds=False):
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
@@ -453,7 +453,7 @@ class Enumerate:
                 bblevellist.append(bbs)
 
                 if level < cycct - 1:
-                    ct, reslist, currct, appendmode = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct, hdrs, currct = currct, appendmode=appendmode)
+                    ct, reslist, currct, appendmode = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct, hdrs, currct = currct, appendmode=appendmode, retIntermeds=False)
                 else:
 
                     reslist[currct] = bblevellist
@@ -466,7 +466,7 @@ class Enumerate:
                     if currct == chksz or ct == fullct:
                         enum_in = pd.DataFrame (reslist, columns=hdrs)
                         self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
-                                                    removeduplicateproducts, appendmode=appendmode)
+                                                    removeduplicateproducts, appendmode=appendmode, retIntermeds=retIntermeds)
                         reslist = [[]] * min(chksz, fullct - ct)
                         currct = 0
                         appendmode = True
@@ -543,8 +543,7 @@ class Enumerate:
                             print(ct, '/', fullct, end='\r')
                         if currct ==  chksz  or ct == rndct:
                             enum_in = pd.DataFrame(reslist, columns=hdrs)
-
-                            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode)
+                            outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct, removeduplicateproducts, appendmode=appendmode, retIntermeds=retIntermeds)
                             reslist = [[]] * min (chksz, rndct - ct)
                             currct = 0
                             appendmode = True
@@ -554,54 +553,71 @@ class Enumerate:
             enum_in = resdf
             hdrs = None
             outpath = self.DoParallel_Enumeration(enum_in, hdrs, libname, rxschemefile, outpath, cycct, rndct,
-                                        removeduplicateproducts, appendmode = False, write_fails_enums=write_fails_enums)
+                                        removeduplicateproducts, appendmode = False, write_fails_enums=write_fails_enums, retIntermeds=retIntermeds)
 
         return outpath
 
-    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True):
-        def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
+    def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True, retIntermeds = False):
+        # def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct, retIntermeds = False):
+        #     reslist = []
+        #     for r in range (0, len(row)):
+        #         rxtnts = []
+        #         for ix in range (0, cycct):
+        #             rxtnts.append (row.iloc[r]['bb' + str (ix + 1) + '_smiles'])
+        #         try:
+        #             res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+        #             if prodct > 1:
+        #                 reslist.append ( 'FAIL--MULTIPLE PRODUCTS')
+        #             else:
+        #                 reslist.append (res)
+        #         except:
+        #             reslist.append ( 'FAIL')
+        #     return reslist
 
-            reslist = []
-            for r in range (0, len(row)):
-                rxtnts = []
-                for ix in range (0, cycct):
-                    rxtnts.append (row.iloc[r]['bb' + str (ix + 1) + '_smiles'])
-                try:
-                    res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
-                    if prodct > 1:
-                        reslist.append ( 'FAIL--MULTIPLE PRODUCTS')
-                    else:
-                        reslist.append (res)
-                except:
-                    reslist.append ( 'FAIL')
-            return reslist
-
-        def oldtaskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct):
+        def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct, retIntermeds = False):
             rxtnts = []
             for ix in range(0, cycct):
                 rxtnts.append(row['bb' + str(ix + 1) + '_smiles'])
             try:
-                res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
+                res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showmols=showstrux, schemeinfo=schemeinfo)
                 if prodct > 1:
                     return 'FAIL--MULTIPLE PRODUCTS'
-            except:
+            except Exception as e:
                 return 'FAIL'
+            res = [res]
+            if retIntermeds:
 
+                for k in range (0, len(schemeinfo[0])):
+                    res.append(schemeinfo[0][k])
+                    if  k < len(schemeinfo[2]):
+                        res.append (schemeinfo[2][k])
+                    else:
+                        res.append (None)
+                return res
             return res
-        def processchunk (resdf, df, outpath):
 
+        def processchunk (resdf, df, outpath, retIntermeds, schemeinfo):
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=CPU_COUNT * 10)
-            schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
-
-            res = ddf.apply(oldtaskfcn, axis=1, result_type='expand',
-                            args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct),
-                            meta=(0, str)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+            if len (ddf) <  1000:
+                NUM_WORKERS = 1
+            metaser = [(0, str)]
+            colnames = {0: 'full_smiles'}
+            if retIntermeds:
+                rxnct = len(schemeinfo [0])
+                for r in range(0,rxnct):
+                    metaser.append ((2*r + 1, str))
+                    metaser.append((2 * r + 2, str))
+                    colnames [2*r + 1] = 'step' + str(r) + '_rxn'
+                    colnames [2*r + 2] = 'step' + str(r) + '_intermed'
+            res = ddf.apply(taskfcn, axis=1, result_type='expand',
+                            args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct, retIntermeds),
+                            meta=metaser).compute(scheduler='processes',  num_workers=NUM_WORKERS)
             pbar.unregister()
-
             moddf = resdf.merge(res, left_index=True, right_index=True)
-            moddf = moddf.rename(columns={0: 'full_smiles'})
+            moddf = moddf.rename(columns=colnames)
+            print (moddf)
 
             if outpath is not None:
                 enumdf = moddf[~moddf['full_smiles'].isin( ['FAIL','FAIL--MULTIPLE PRODUCTS'])]
@@ -626,6 +642,7 @@ class Enumerate:
         if rndct != -1:
             outsuff = str(rndct)
         hdrstr = ','.join (hdrs)
+        schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
         if outpath is not None:
             if not write_fails_enums:
                 flist = [outpath + '.' + outsuff + '.all.csv',None, None]
@@ -635,6 +652,11 @@ class Enumerate:
                 for fname in flist:
                     f = open(fname, 'w')
                     f.write(hdrstr +',full_smiles')
+                    rxnct = len(schemeinfo[0])
+                    if retIntermeds:
+                        for r in range(0, rxnct):
+                            f.write( ',step' + str(r) + '_rxn')
+                            f.write(',step' + str(r) + '_intermed')
                     f.write ('\n')
                     f.close()
 
@@ -645,12 +667,11 @@ class Enumerate:
             for chunk in reader:
                 resdf = pd.DataFrame (chunk, columns = hdrs)
                 print('CHUNK', cct)
-                df = processchunk(resdf, df, outpath)
+                df = processchunk(resdf, df, outpath , schemeinfo=schemeinfo, retIntermeds=retIntermeds)
                 cct += 1
         else:
             df = None
-            df = processchunk(enum_in, df, outpath)
-
+            df = processchunk(enum_in, df, outpath, schemeinfo=schemeinfo,retIntermeds=retIntermeds)
 
         if outpath is not None:
             path = outpath + '.' + outsuff + '.all.csv'
@@ -682,7 +703,6 @@ class Enumerate:
         infilelist = []
 
         for f in flist:
-            print ('FLIST:', f)
             c = str(f)
             result = re.search(r'\.BB[0-9]+\.', c)
             if result is not None:
@@ -694,7 +714,8 @@ class Enumerate:
             return ''
         return infilelist
 
-    def EnumFromBBFiles(self, libname, bb_specialcode, out_specialcode, enumsfolder, lib_subfolder, num_strux, rxschemefile, picklistfile=None, SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True):
+    def EnumFromBBFiles(self, libname, bb_specialcode, out_specialcode, enumsfolder, lib_subfolder, num_strux, rxschemefile, picklistfile=None,
+                        SMILEScolnames = [], BBcolnames = [], rem_dups = False, returndf = False, write_fails_enums = True, retIntermeds = False):
 
         infilelist = self.Get_BBFiles (bb_specialcode, lib_subfolder, enumsfolder, libname)
         if type (infilelist) == str:
@@ -713,7 +734,8 @@ class Enumerate:
 
         if returndf is True:
             outpath = None
-        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile, SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums)
+        outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile,
+                                               SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums, retIntermeds = retIntermeds)
         return outfile
 
     def FilterBBs(self, bbdict, filterfile):
@@ -1200,14 +1222,13 @@ class EnumerationUI:
                         if st.session_state ['enumerate_remdups'] == 'True':
                             remdup_val = True
                     remdups = st.checkbox (label='Remove Duplicate Products', value = remdup_val )
+                    addintermeds = st.checkbox(label='Add Intermediates', value=remdup_val)
                     if expval:
                         try:
                             ct = int (countval)
                         except:
                             ct = 5000
-
-                        print (schemename, specstr, specstr, lspath,  specstr, ct, rxnschemefile)
-                        self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath,  specstr, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups)
+                        self.enum.EnumFromBBFiles(schemename, specstr, specstr, lspath,  specstr, ct, rxnschemefile, SMILEScolnames=self.smiles_colnames, BBcolnames=self.bbid_colnames, rem_dups=remdups, retIntermeds=addintermeds)
 
 
         if Enumerate == True:
@@ -1243,7 +1264,14 @@ class EnumerationUI:
                 with coly2:
                     with st.expander(label='Reaction Products'):
                         st.image(MolDisplay.ShowMols(intermeds, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
-                dispdf = pd.DataFrame ([[rxtnts [0], intermeds[0], rxninfo [0]], [rxtnts [1], intermeds[1], rxninfo [1]], [rxtnts [2], intermeds[2], rxninfo [2]]], columns = ['Reactant', 'Intermediate','RxnInfo'])
+                displist = []
+                print (len(rxtnts), len(intermeds), len(rxninfo))
+                for x in range (0, len(rxtnts)):
+                    if len (intermeds) - 1 < x:
+                        displist.append([rxtnts[x], None, rxninfo[x]])
+                    else:
+                        displist.append ([rxtnts [x], intermeds[x], rxninfo [x]])
+                dispdf = pd.DataFrame (displist, columns = ['Reactant', 'Intermediate','RxnInfo'])
                 with st.expander (label='Rxn Info Grid'):
                     MolDisplay.ShowMols_StreamLit_Grid (dispdf,['Reactant', 'Intermediate'], rowheight = 200 )
 

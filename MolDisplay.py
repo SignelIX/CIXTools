@@ -102,7 +102,11 @@ def ShowMols_StreamLit_Grid (df, smilescols = ['SMILES'], rowheight = 100):
             gb.configure_column(c + "_Image", headerName=s, cellRenderer=image_render)
     for ix, row in dispdf.iterrows():
         for s in smilescols:
-            dispdf.at [ix,s + '_Image'] =ShowMol(row[s],outtype='b64_datauri')
+            print (row[s])
+            if row[s] is not None:
+                 dispdf.at [ix,s + '_Image'] =ShowMol(row[s],outtype='b64_datauri')
+            else:
+                 dispdf.at[ix, s + '_Image'] = None
 
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, editable=True,
                                 enableRangeSelection=True, )
