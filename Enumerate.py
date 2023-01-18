@@ -437,7 +437,7 @@ class Enumerate:
             df.to_csv (dp_outfile)
 
     def enumerate_library_strux(self, libname, rxschemefile, infilelist, outpath, rndct=-1, bblistfile=None, SMILEScolnames = [], BBIDcolnames = [], removeduplicateproducts = False, outtype = 'filepath', write_fails_enums = True, retIntermeds=False):
-        def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False):
+        def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False, retIntermeds = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
                 print ('RESLIST', len(reslist))
@@ -453,7 +453,7 @@ class Enumerate:
                 bblevellist.append(bbs)
 
                 if level < cycct - 1:
-                    ct, reslist, currct, appendmode = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct, hdrs, currct = currct, appendmode=appendmode, retIntermeds=False)
+                    ct, reslist, currct, appendmode = rec_bbpull(bdfs, level + 1, cycct, bblevellist, ct, reslist, fullct, hdrs, currct = currct, appendmode=appendmode, retIntermeds=retIntermeds)
                 else:
 
                     reslist[currct] = bblevellist
@@ -519,7 +519,7 @@ class Enumerate:
                 with open(outpath + ".EnumList.csv", "w") as f:
                     writer = csv.writer(f)
                     writer.writerow(hdrs)
-                rec_bbpull (bdfs, 0, cycct, [], 0, None, fullct, hdrs, appendmode = appendmode)
+                rec_bbpull (bdfs, 0, cycct, [], 0, None, fullct, hdrs, appendmode = appendmode, retIntermeds=retIntermeds)
             else:
                 reslist = [[]] * min(rndct, chksz)
                 ct = 0
