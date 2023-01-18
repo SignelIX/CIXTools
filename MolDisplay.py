@@ -40,7 +40,7 @@ def ShowMol( smiles, outtype=None):
         return sb
     return plt
 
-def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
+def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt', fname='test_mols.png'):
     list = []
     if smiles_list is not None:
         for smi in smiles_list:
@@ -71,7 +71,7 @@ def ShowMols( smiles_list, cols = 4, subImgSize = (200,200), outtype = 'plt'):
             sb += base64.b64encode(data).decode('ascii')
             return sb
         else:
-            img.save('test_mols.png')
+            img.save(fname)
             plt.imshow(img)
             return plt
     else:

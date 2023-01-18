@@ -558,21 +558,6 @@ class Enumerate:
         return outpath
 
     def DoParallel_Enumeration (self, enum_in, hdrs, libname, rxschemefile,outpath, cycct, rndct=-1, removeduplicateproducts = False, appendmode = False, write_fails_enums=True, retIntermeds = False):
-        # def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct, retIntermeds = False):
-        #     reslist = []
-        #     for r in range (0, len(row)):
-        #         rxtnts = []
-        #         for ix in range (0, cycct):
-        #             rxtnts.append (row.iloc[r]['bb' + str (ix + 1) + '_smiles'])
-        #         try:
-        #             res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showstrux, schemeinfo)
-        #             if prodct > 1:
-        #                 reslist.append ( 'FAIL--MULTIPLE PRODUCTS')
-        #             else:
-        #                 reslist.append (res)
-        #         except:
-        #             reslist.append ( 'FAIL')
-        #     return reslist
 
         def taskfcn(row, libname, rxschemefile, showstrux, schemeinfo, cycct, retIntermeds = False):
             rxtnts = []
@@ -600,8 +585,10 @@ class Enumerate:
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=CPU_COUNT * 10)
-            if len (ddf) <  1000:
-                NUM_WORKERS = 1
+            if len (ddf) <  997:
+                wrkrs = 1
+            else:
+                wrkrs  = NUM_WORKERS
             metaser = [(0, str)]
             colnames = {0: 'full_smiles'}
             if retIntermeds:
@@ -613,7 +600,7 @@ class Enumerate:
                     colnames [2*r + 2] = 'step' + str(r) + '_intermed'
             res = ddf.apply(taskfcn, axis=1, result_type='expand',
                             args=(libname, rxschemefile, rndct == 1, schemeinfo, cycct, retIntermeds),
-                            meta=metaser).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+                            meta=metaser).compute(scheduler='processes',  num_workers=wrkrs)
             pbar.unregister()
             moddf = resdf.merge(res, left_index=True, right_index=True)
             moddf = moddf.rename(columns=colnames)
