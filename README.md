@@ -25,7 +25,7 @@ in the scheme folder create a subfolder named <specstr>
 under this folder create a subfolder called BBLists
 BB files in this set up should be named <scheme>.<specstr>.BB<X>.csv
 This specstr can be entered into the UI to refer to the specific BB sets
-![img_1.png](img_1.png)
+![img_1.png](Readme_Images/img_1.png)
 
 <h2>Running the streamlit UI</h2>
 The streamlit UI is launched with the following command:
@@ -34,7 +34,7 @@ This will provide a URL for access in std out.
 The UI is set up to provide multiple functionalities that can be accessed through buttons on the side pane.
 To access Enumeration, click the top button under controls
 
-![img.png](img.png)
+![img.png](Readme_Images/img.png)
 
 <h2>Enumeration</h2>
 Groups that I work with increasingly are interested in enumerating chemical space with building blocks in
@@ -102,7 +102,7 @@ each scheme can be separated by comma
         ]   
     }
 <h3>Export</h3>
-![img_2.png](img_2.png)
+![img_2.png](Readme_Images/img_2.png)
 
 
 
