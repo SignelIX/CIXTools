@@ -1,5 +1,7 @@
-<h1>Background</h1><p>
+<h2>Background</h2>
+<p>
 Authors: Eric Sigel
+
 Contributors: Antoine Dumas
 
 CIxTools is an accumulated set of Cheminformatics tools built on rdkit that I have been building for my consulting work
@@ -25,9 +27,13 @@ in the scheme folder create a subfolder named <specstr>
 under this folder create a subfolder called BBLists
 BB files in this set up should be named <scheme>.<specstr>.BB<X>.csv
 This specstr can be entered into the UI to refer to the specific BB sets
-![img_1.png](Readme_Images/img_1.png)
+<p></p>
 
+![img1.png](Readme_Images/img_1.png)
+
+<p></p>
 <h2>Running the streamlit UI</h2>
+<p>
 The streamlit UI is launched with the following command:
 streamlit run CIxToolsMainUI.py
 This will provide a URL for access in std out.
@@ -81,8 +87,8 @@ Example json scheme:
         ]
     }
 
-<p>
-</h3>Basic Elements</h3>
+<p></p>
+<h3>Basic Elements</h3>
 each scheme can be separated by comma
 <p>
 
