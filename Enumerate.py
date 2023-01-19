@@ -566,12 +566,13 @@ class Enumerate:
             try:
                 res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showmols=showstrux, schemeinfo=schemeinfo)
                 if prodct > 1:
-                    return 'FAIL--MULTIPLE PRODUCTS'
+                    res =  ['FAIL--MULTIPLE PRODUCTS']
+                else:
+                    res = [res]
             except Exception as e:
-                return 'FAIL'
-            res = [res]
-            if retIntermeds:
+                res =  ['FAIL']
 
+            if retIntermeds:
                 for k in range (0, len(schemeinfo[0])):
                     res.append(schemeinfo[0][k])
                     if  k < len(schemeinfo[2]):
@@ -585,11 +586,11 @@ class Enumerate:
             pbar = ProgressBar()
             pbar.register()
             ddf = dd.from_pandas(resdf, npartitions=CPU_COUNT * 10)
-            if len (ddf) <  997:
+            if len (ddf) <  5000:
                 wrkrs = 1
             else:
                 wrkrs  = NUM_WORKERS
-            metaser = [(0, str)]
+            metaser = [(0, object)]
             colnames = {0: 'full_smiles'}
             if retIntermeds:
                 rxnct = len(schemeinfo [0])
@@ -604,7 +605,6 @@ class Enumerate:
             pbar.unregister()
             moddf = resdf.merge(res, left_index=True, right_index=True)
             moddf = moddf.rename(columns=colnames)
-            print (moddf)
 
             if outpath is not None:
                 enumdf = moddf[~moddf['full_smiles'].isin( ['FAIL','FAIL--MULTIPLE PRODUCTS'])]
