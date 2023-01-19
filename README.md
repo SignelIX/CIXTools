@@ -102,7 +102,13 @@ each scheme can be separated by comma
         ]   
     }
 <h3>Simple Enumeration</h3>
+In the Rxn Scheme File  text box paste path to RxnSchemes.json file (this can be an alternative name to allow e.g. dev versions)
+Re-Initialize button will reload the schemes
+Scheme path should point to folder (e.g. Enumerations) where scheme folders are located (e.g. containing BBLists)
+requires trailing slash
+Entering the correct information should cause the Schemes dropdown to appear and populate
 ![img_4.png](Readme_Images/img_4.png)
+
 <h3>Export</h3>
 Export provides a mechanism to export a random sample of a specified size (positive number)
 Or the full library (-1) in the count field
@@ -111,6 +117,8 @@ Add Intermediates check box will add reaction intermediate information to the ou
 
 ![img_2.png](Readme_Images/img_2.png)
 
+
+--Incomplete ES 1/19/23--
 
 
 
