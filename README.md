@@ -101,7 +101,14 @@ each scheme can be separated by comma
             }
         ]   
     }
+<h3>Simple Enumeration</h3>
+![img_4.png](Readme_Images/img_4.png)
 <h3>Export</h3>
+Export provides a mechanism to export a random sample of a specified size (positive number)
+Or the full library (-1) in the count field
+Remove Duplicates check box will identify rows with the same structure and take the first row only
+Add Intermediates check box will add reaction intermediate information to the output including the reaction and product (where possible) of each step
+
 ![img_2.png](Readme_Images/img_2.png)
 
 
