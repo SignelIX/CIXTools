@@ -622,18 +622,20 @@ class Enumerate:
                 curr_ct = 1
                 for idx in list(range(cycct)):
                     nmbr_per_bb = len(bdfs[idx])
-                    if nmbr_per_bb < nmbr_rqrd_bb: 
-                        warnings.warn(f"Building block {idx+1} has fewer compounds than expected. Using all of the compounds.")
+                    if nmbr_per_bb < nmbr_rqrd_bb:
+                        warning_message1 = f"Building block {idx+1} has fewer compounds than expected. Using all of the compounds." 
+                        warnings.warn(warning_message1)
                         curr_ct *= nmbr_per_bb
                         nmbr_rqrd_bb = rndct/curr_ct
                         if not idx==cycct-1:
-                            nmbr_rqrd_bb = nmbr_rqrd_bb ** (1/(cycct-1))
+                            nmbr_rqrd_bb = nmbr_rqrd_bb ** (1/(cycct-idx-1))
                         nmbr_rqrd_bb = math.ceil(nmbr_rqrd_bb)
                     else:
                         bdfs[idx] = bdfs[idx].head(nmbr_rqrd_bb)
-                        curr_ct *= nmbr_per_bb   
+                        curr_ct *= nmbr_rqrd_bb
                 test_fullct = math.prod([len(d) for d in bdfs])
-                warnings.warn(f"Actual total number of compounds iterating {test_fullct}.")
+                warning_message2 = f"Actual total number of compounds iterating {test_fullct}." 
+                warnings.warn(warning_message2)
 
             prtn_len = len(bdfs[prtn_indx])
             prtn_sze = prtn_len // prtn_step
