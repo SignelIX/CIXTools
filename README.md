@@ -1,7 +1,7 @@
 <h2>Background</h2>
 <p>
 Authors: Eric Sigel
-
+<p>
 Contributors: Antoine Dumas
 
 CIxTools is an accumulated set of Cheminformatics tools built on rdkit that I have been building for my consulting work
@@ -10,12 +10,19 @@ Many functions are accessible from a lightweight frontend built with streamlit, 
 through CLI options.
 
 <h2>Setup</h2>
+<h3>Conda env</h3>
+conda env create environment.yml
+conda activate CixTools
+pip install -r requirements.txt
+
+<h3>Folder structure</h3>
 *Where file names can be specified, the names are suggestions not requirements. 
 Recommended installation, create a folder called CIx.
 At top level of CIx create a folder called Enumerations and a folder called CIxTools
 Additionally create a file called CIxTools.init.json, which can be an empty dictionary ('{}')
 This file is used to store default values.
 Optionally, for some CLI functionality, a file called inparams.yml can be created at the CIx level
+
 <h3>For Enumerations:</h3>
 Under the Enumerations folder create a .json file called RxnSchemes.json
 For each reaction scheme that is added to RxnSchemes.json, create a subfolder with the scheme name
@@ -30,6 +37,7 @@ This specstr can be entered into the UI to refer to the specific BB sets
 <p></p>
 
 ![img1.png](Readme_Images/img_1.png)
+
 
 <p></p>
 <h2>Running the streamlit UI</h2>
@@ -126,5 +134,6 @@ Add Intermediates check box will add reaction intermediate information to the ou
 
 --Incomplete ES 1/19/23--
 
-
+<h2>generation of install files</h2>
+pip list --format=freeze > requirements.txt
 
