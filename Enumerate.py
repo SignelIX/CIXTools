@@ -41,6 +41,8 @@ import itertools
 import warnings
 import multiprocessing as mp
 from pathos.multiprocessing import ProcessingPool as Pool
+from streamlit import runtime
+
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT 
 chksz = 50000
@@ -1422,7 +1424,7 @@ class EnumerationCLI :
 
 
 if __name__=="__main__":
-    if st._is_running_with_streamlit:
+    if runtime.exists ():
         enum = EnumerationUI ()
         enum.RunUI ()
     else:
