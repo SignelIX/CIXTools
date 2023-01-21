@@ -591,6 +591,7 @@ class Similarity:
         cycs = []
         for cyc in bbdict.keys():
             cycs.append(cyc)
+
         for cx in range(0, len(cycs)):
             if bbdict [cycs[cx]] is not None:
                 bbdict[cycs[cx]]['dummy_smiles'] = None

@@ -736,12 +736,18 @@ class Enumerate:
         for dx in bbdict.keys():
             removeidxs[dx] = []
             for idx, row in bbdict[dx].iterrows():
-                m = Chem.MolFromSmiles(row['SMILES'])
+                try:
+                    m = Chem.MolFromSmiles(row['SMILES'])
+                except Exception as e:
+                    print (filterfile)
+                    print (row ['BB_ID'], row['SMILES'])
+                    raise (e)
                 for v in patterndict.values():
                     if m.HasSubstructMatch(v) == True:
                         removeidxs[dx].append(idx)
                         continue
             bbdict[dx].drop(removeidxs[dx], axis=0, inplace=True)
+            bbdict[dx] = bbdict[dx].reset_index ()
         return bbdict
 
     def Get_MoleculesFromSMARTSFilters (self, infile, outfile, inclSMARTS, exclSMARTS ):
