@@ -11,4 +11,4 @@ prefix: /Users/eric/opt/anaconda3/envs/SignelIX_CIx/envs/SignelIx_CIx
 dependencies:
     - pip
     - pip:
-        -r requirements.txt
+        - -r requirements.txt
