@@ -11,5 +11,5 @@ prefix: /Users/eric/opt/anaconda3/envs/SignelIX_CIx/envs/SignelIx_CIx
 dependencies:
     - pip
     - pip:
-      - -r file:requirements.txt
+      - -r requirements.txt
 #conda env remove -n CIxTools_auto
