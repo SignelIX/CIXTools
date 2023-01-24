@@ -1,8 +1,8 @@
 import streamlit as st
-import Enumerate
-import Chem_SpaceVisualization as ChSV
-import Chem_CalcProps
-import Chem_Similarity_Diversity
+import Enumerate_UI
+import Chem_SpaceVisualization_UI
+import Chem_CalcProps_UI
+import Chem_Similarity_Diversity_UI
 from streamlit import runtime
 
 
@@ -22,11 +22,11 @@ class CIXTools_MainUI:
         self.page = ''
         pg = None
         btnlist = [
-            ('ENUM', 'Enumeration', Enumerate.EnumerationUI, None),
-            ('CHEMSPACE', 'Display Chemical Space', ChSV.Chem_SpaceVisualizationUI, None),
-            ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps.Chem_CalcPropsUI, None),
-            ('SIMILARITY', 'Similarity Analysis', Chem_Similarity_Diversity.Chem_Similarity_DiversityUI, 'Sim Search'),
-            ('BBSIMILARITY', 'BB Similarity', Chem_Similarity_Diversity.Chem_Similarity_DiversityUI, 'BB Similarity')
+            ('ENUM', 'Enumeration', Enumerate_UI.EnumerationUI, None),
+            ('CHEMSPACE', 'Display Chemical Space', Chem_SpaceVisualization_UI.Chem_SpaceVisualizationUI, None),
+            ('ADD_PROPS', 'Add Chem Properties', Chem_CalcProps_UI.Chem_CalcPropsUI, None),
+            ('SIMILARITY', 'Similarity Analysis', Chem_Similarity_Diversity_UI.Chem_Similarity_DiversityUI, 'Sim Search'),
+            ('BBSIMILARITY', 'BB Similarity', Chem_Similarity_Diversity_UI.Chem_Similarity_DiversityUI, 'BB Similarity')
         ]
         for b in btnlist:
             btn  = st.sidebar.button(b[1])

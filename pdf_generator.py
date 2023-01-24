@@ -1,10 +1,7 @@
 from fpdf import FPDF
 import MolDisplay
-import io
-import base64
 import os
 import tempfile
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
