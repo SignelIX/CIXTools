@@ -566,6 +566,7 @@ class Enumerate:
             try:
                 res, prodct, schemeinfo = self.RunRxnScheme(rxtnts, rxschemefile, libname, showmols=showstrux, schemeinfo=schemeinfo)
                 if prodct > 1:
+                    print ('FAIL--MULTIPLE PRODUCTS', res)
                     res =  ['FAIL--MULTIPLE PRODUCTS']
                 else:
                     res = [res]
@@ -774,7 +775,6 @@ class Enumerate:
         print (df)
         df.to_csv (outfile)
 
-
     def PassFilters(self, input_mol, filters_dict, filtname):
         filters = filters_dict[filtname]
         incl_list = filters['include']
@@ -802,8 +802,6 @@ class Enumerate:
         return True
 
     def generate_BBlists(self, inpath, outpath, libname, rxnschemefile):
-
-
         f = open(rxnschemefile)
         data = json.load(f)
         f.close()
@@ -949,6 +947,7 @@ class EnumerationCLI :
         parser.add_argument('-sp', '--schemepath', nargs='?', default=None, type=str, help='Enumerations folder path')
         parser.add_argument('-s', '--scheme', nargs='?', default=None, type=str, help='Scheme Name')
         parser.add_argument('-sx', '--schemespec', nargs='?', default=None, type=str, help='sub-scheme Specifier')
+        parser.add_argument('-bx', '--bbspecialcode', nargs='?', default=None, type=str, help='BB files special code')
         parser.add_argument('-n', '--numstrux', nargs='?', default=None, type=int,
                             help='number of structures to enumerate (-1 for all)')
         parser.add_argument('-rd', '--removedups', nargs='?', default=None, type=str,
@@ -1001,12 +1000,12 @@ class EnumerationCLI :
 
         enum = Enumerate()
         print ('Starting Enumeration')
-        outf = enum.EnumFromBBFiles(args['scheme'], args['schemespec'], args['schemespec'], args['schemepath'],
-                             args['scheme'] + addspec, args['numstrux'],
+
+        outf = enum.EnumFromBBFiles(args['scheme'], args['bbspecialcode'], args['schemespec'], args['schemepath'],
+                             addspec, args['numstrux'],
                              args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums)
         print ('output prefix', outf)
         print('End Enumeration')
-
 
 if __name__=="__main__":
         EnumerationCLI.Run_CLI()
