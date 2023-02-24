@@ -7,6 +7,7 @@ from dask.diagnostics import ProgressBar
 import json
 import matplotlib.pyplot as plt
 import math
+from rdkit.Chem import AllChem
 
 NUM_WORKERS = 16
 
@@ -68,12 +69,14 @@ class Chem_CalcProps:
         grid = plt.GridSpec(math.ceil (plotlen/gridwidth), gridwidth, wspace=.8, hspace=.8)
 
         ct = 0
+        print (props.keys ())
         for p in props.keys ():
             subplt = plt.subplot( grid[int(ct/gridwidth), ct % gridwidth])
             step = (props[p][1]-props[p][0])/(props[p][2]-1)
             numsteps = (props[p][1]-props[p][0])/step
             ticks =  [float(x) for x in range (0, math.ceil(numsteps))]
             ticks = [step * t + props[p][0]  for t in ticks  ]
+            print (df.columns )
             subplt.hist(df[p], edgecolor = 'black', color='blue', bins = ticks)
             ct += 1
             subplt.set (xlabel=p, ylabel = 'Count')
@@ -120,6 +123,64 @@ class Chem_CalcProps:
                 CSMILES = Chem.CanonSmiles(row['full_smiles'])
                 df.loc[ix, 'CSMILES'] = CSMILES
         df.to_csv (outfile)
+    def CalcPartialCharge (self, SMILES, atomidx):
+        m = AllChem.MolFromSmiles(SMILES)
+        AllChem.ComputeGasteigerCharges(m)
+        res = m.GetAtomWithIdx(atomidx).GetProp('_GasteigerCharge')
+        return res
 
-props = Chem_CalcProps ()
+    def Filters(self, m, filter_dict, stats):
+        if stats is None:
+            stats = {'MW': 0, 'tPSA': 0, 'logP': 0, 'rotB':0}
+        if filter_dict is None:
+            return False, stats;
+        if ('MW_high' in filter_dict) or ('MW_low' in filter_dict):
+            mw = Descriptors.MolWt(m)
+        if 'MW_high' in filter_dict:
+            if mw > filter_dict['MW_high']:
+                stats['MW'] += 1
+                return True, stats
+        if 'MW_low' in filter_dict:
+            if mw < filter_dict['MW_low']:
+                stats['MW'] += 1
+                return True, stats
+        if ('tPSA' in filter_dict):
+            tpsa = Descriptors.TPSA(m)
+            if tpsa > filter_dict['tPSA']:
+                stats['tPSA'] += 1
+                return True, stats
+        if ('logP_high' in filter_dict) or ('logP_low' in filter_dict):
+            logP = Descriptors.MolLogP(m)
+        if ('logP_high' in filter_dict):
+            logphigh = filter_dict['logP_high']
+            if logP > logphigh:  # aLogP
+                # print ('logphigh', logP)
+                stats['logP'] += 1
+                return True, stats
+        if ('logP_low' in filter_dict):
+            logplow = filter_dict['logP_low']
+            if logP < logplow:  # aLogP
+                stats['logP'] += 1
+                return True, stats
+        if ('RotB_low' in filter_dict) or ('RotB_high' in filter_dict):
+            rotB = rdMolDescriptors.CalcNumRotatableBonds(m)
+        if ('RotB_low' in filter_dict):
+            rotb_low = filter_dict['RotB_low']
+            if rotB < rotb_low:  # aLogP
+                stats['rotB'] += 1
+                return True, stats
+        if ('RotB_high' in filter_dict):
+            rotb_high = filter_dict['RotB_high']
+            if rotB > rotb_high:  # aLogP
+                stats['rotB'] += 1
+                return True, stats
 
+        return False, stats
+
+
+# props = Chem_CalcProps ()
+
+if __name__ == "__main__":
+    props = Chem_CalcProps()
+    res = props.CalcPartialCharge ('O=CCCNC(=O)OCc1ccccc1', 1)
+    print (res)

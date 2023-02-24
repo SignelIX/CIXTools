@@ -1,6 +1,7 @@
 from rdkit.Chem import SaltRemover
 from rdkit import Chem
 from rdkit.Chem import Descriptors as Descr
+import rdkit.Chem.rdMolDescriptors as rdMolDescriptors
 import matplotlib.pyplot as plt
 from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
@@ -9,6 +10,7 @@ import pandas as pd
 from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
 import Enumerate
 import pathlib
+import Chem_CalcProps
 
 def SaltStripMolecules (molecules: pd.DataFrame):
     tqdm.pandas ()
@@ -233,58 +235,28 @@ def PlotProperties (filename, cols, bins):
         plt.show ()
 
 def Filters ( m, filter_dict, stats):
-    if stats is None:
-        stats = {'MW':0,'tPSA':0, 'logP': 0 }
-    if filter_dict is None:
-        return False, stats;
-    if ('MW_high' in filter_dict) or ('MW_low' in filter_dict):
-        mw = Descr.MolWt(m)
-    if 'MW_high' in filter_dict:
-        if mw > filter_dict['MW_high']:
-            stats ['MW'] += 1
-            return True, stats
-    if 'MW_low' in filter_dict:
-        if mw < filter_dict['MW_low']:
-            stats ['MW'] += 1
-            return True, stats
-    if ('tPSA' in filter_dict):
-        tpsa = Descr.TPSA(m)
-        if tpsa > filter_dict['tPSA']:
-            stats ['tPSA'] += 1
-            return True, stats
-    if ('logP_high' in filter_dict) or ('logP_low' in filter_dict):
-        logP = Descr.MolLogP(m)
-    if ('logP_high' in  filter_dict):
-        logphigh = filter_dict['logP_high']
-        if logP > logphigh: #aLogP
-            # print ('logphigh', logP)
-            stats ['logP'] += 1
-            return True, stats
-    if ('logP_low' in filter_dict):
-        logplow = filter_dict['logP_low']
-        if logP < logplow: #aLogP
-            stats ['logP'] += 1
-            return True, stats
+    cp = Chem_CalcProps.Chem_CalcProps ()
+    return cp.Filters(m, filter_dict, stats)
 
-    return False, stats
-
-
-def ApplyFilters ( line, smilescol, filter_dict, splitchar, ssfilters, useChirality, AmbiguousChirality, Keep):
-    smi = line.split (splitchar) [smilescol]
+def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality, Keep, retbool=True):
     try:
         m = Chem.MolFromSmiles(Kekulize_Smiles( smi))
     except:
         return Keep
-    propFiltered = Filters(m , filter_dict)
-    ssFiltered = Substructure_Filters (m, None, ssfilters, useChirality, Keep)
+    propFiltered,stats = Filters(m , filter_dict, stats =None)
+    ssFiltered, df = Substructure_Filters (m, None, ssfilters, useChirality, Keep)
     ambig = False
     if (AmbiguousChirality == True):
         ambig = ContainsUnresolvedChirality(m)
 
     if (Keep):
-        return propFiltered and ssFiltered and ambig
+        if retbool:
+            return propFiltered and ssFiltered and ambig
+        return propFiltered and ssFiltered and ambig, [propFiltered, ssFiltered, ambig]
     else:
-        return propFiltered or ssFiltered or ambig
+        if retbool:
+            return propFiltered or ssFiltered or ambig
+        return propFiltered or ssFiltered or ambig, [propFiltered, ssFiltered, ambig]
 
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False):
@@ -372,8 +344,13 @@ def ContainsUnresolvedChirality (m):
     else:
         return False
 
-def RemoveChirality (infile, outfile, smilescol):
-    df = pd.read_csv(infile)
+def RemoveChirality_FromSMILES (smi):
+    mol = Chem.MolFromSmiles(smi)
+    Chem.RemoveStereochemistry(mol)
+    return Chem.MolToSmiles(mol)
+
+def RemoveChirality (infile_or_df, outfile, smilescol):
+    df = pd.read_csv(infile_or_df)
     df['achiral_smiles'] = ''
     df = df.rename(columns = {df.columns [0]:'orig_rownum'})
 

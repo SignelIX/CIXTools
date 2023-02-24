@@ -533,6 +533,7 @@ class Diversity:
                     slist.append(c[0])
             inseries = pd.Series(slist)
 
+
         ddf = dd.from_pandas(inseries, npartitions=CPU_COUNT * 10)
         if showprog:
             pbar = ProgressBar()
@@ -579,7 +580,7 @@ class Diversity:
 class Similarity:
     chksz = 10000000
     enum = Enumerate.Enumerate ()
-    def PrepBBs(self, bbdict, libname, rxnschemefile, sim_column='dummy_smiles'):
+    def PrepBBs(self, bbdict, libname, rxnschemefile, sim_column='dummy_smiles', smiles_col='SMILES'):
         scheme, rxtnts = self.enum.ReadRxnScheme(rxnschemefile, libname, FullInfo=True)
         dummyrxtnts = scheme['scaffold_dummy_structures']
         cycs = []
@@ -591,9 +592,10 @@ class Similarity:
                 bbdict[cycs[cx]]['dummy_smiles'] = None
                 bbdict[cycs[cx]]['skel_smiles'] = None
                 bbdict[cycs[cx]]['scaff_smiles'] = None
+
                 rxtnts = copy.deepcopy(dummyrxtnts)
                 for idx, row in tqdm(bbdict[cycs[cx]].iterrows(), total=len(bbdict[cycs[cx]])):
-                    rxtnts[cx] = row['SMILES']
+                    rxtnts[cx] = row[smiles_col]
                     res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
 
                     if res[0] != 'FAIL':
@@ -625,28 +627,40 @@ class Similarity:
             infilelist = self.enum.Get_BBFiles(bbspec, libspec, path, libname)
         cycdict = self.enum.load_BBlists(infilelist, BBIDcolnames=BBIDcolnames, SMILEScolnames=SMILEScolnames)
 
+
         for k in cycdict.keys ():
             if cycdict[k] is not None:
                 print('START LEN', len(cycdict[k]))
-                cycdict[k] = cycdict[k][cycdict[k]['MWT']<=mw_cutoff]
+                cycdict[k] = cycdict[k][cycdict[k]['MW']<=mw_cutoff]
                 print('END LEN', len(cycdict[k]))
-                print (len(cycdict[k]))
+
+
         bbdict = self.PrepBBs (cycdict, libname, rxnschemefile, simcolumn )
+
         div = Diversity ()
 
         for k in bbdict.keys ():
             if bbdict[k] is not None:
                 fps = div.generatefps_dask (bbdict [k], bitvec=True, SMILEScolname = simcolumn)
+
                 for x in range (0, len (bbdict[k])):
                     if fps [x] is None:
                         print  (bbdict[k].iloc [x], 'None')
 
-
-                k_means = KMeans(n_clusters=nclusters)
+                k_means = KMeans(n_clusters=nclusters [k])
                 k_means.fit(fps)
                 bbdict [k]['clustnum'] = k_means.labels_
-                bbdict [k].to_csv (path + '/' + libname + '/BBLists/' +libname + '.'  + k + '.clust.csv')
+                opath = path + '/' + libname + '/'
+                if libspec is not None and libspec != '':
+                    opath += libspec
+                    opath += '/BBLists/' + libspec + '.' + k + '.clust.csv'
+                else:
+                    opath += '/BBLists/' + libname + '.' + k + '.clust.csv'
+
+                bbdict [k].to_csv (opath)
+                print (opath)
         return
+
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None, addtlcols=None):
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
         reslist = []

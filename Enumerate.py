@@ -44,6 +44,9 @@ chksz = 50000
 numexpr.set_num_threads(numexpr.detect_number_of_cores())
 if "NUMEXPR_MAX_THREADS" not in os.environ:
     os.environ["NUMEXPR_MAX_THREADS"] = '16'
+else:
+    NUM_WORKERS = int(os.environ["NUMEXPR_MAX_THREADS"] )
+
 
 class Enumerate:
     rxndict = {}
@@ -935,6 +938,23 @@ class Enumerate:
             p, prod_ct, [scheme, rxtants, intermeds] =  self.RunRxnScheme(inrxtnts, rxnschemefile, schemename, False)
             return p
 
+    def Get_CycleList (self, rxnschemefile, schemename):
+        scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, FullInfo=True)
+        return scheme ['BB_Cycles']
+    def Get_LibCycle_BBCriteria (self, rxnschemefile, schemename, cycle, fieldname='filters'):
+        scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename,  FullInfo=True)
+        if fieldname in scheme:
+            if cycle in scheme [fieldname]:
+                return scheme [fieldname][cycle]
+            else:
+                if 'names' in scheme [fieldname]:
+                    for n in scheme [fieldname]['names']:
+                        if scheme [fieldname]['names'][n] == cycle:
+                            return scheme [fieldname]['BB_filters'][n]
+                    return None
+        else:
+            return None
+
 class EnumerationCLI :
     @staticmethod
     def Run_CLI (SMILEScolnames = None, BBcolnames = None):
@@ -1008,7 +1028,8 @@ class EnumerationCLI :
         print('End Enumeration')
 
 if __name__=="__main__":
-        EnumerationCLI.Run_CLI()
+    EnumerationCLI.Run_CLI()
+
 
 
 
