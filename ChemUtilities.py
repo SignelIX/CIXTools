@@ -320,6 +320,12 @@ def SubstructureCheckMolecules (molecules: pd.DataFrame, ss_smarts):
             passixs.append (ix)
     return molecules.iloc [passixs].reset_index ()
 
+
+def SubstructureCheckSMILES(smiles, smarts, useChirality=False):
+    m=Chem.MolFromSmiles(smiles)
+    smartsmol = Chem.MolFromSmarts(smarts)
+    return m.HasSubstructMatch(smartsmol, useChirality=useChirality)
+
 def Substructure_Filters (input_mol, outfile, ss_filters, useChirality, Keep_IfNoFilter):
     if type (input_mol) == str:
         input_mol = Chem.MolFromSmiles(input_mol)
@@ -401,4 +407,6 @@ def ConvertSDFilesFromDir (inpath, outfile):
         alldf = pd.concat([alldf, df], axis=0, ignore_index=True)
 
     alldf.to_csv (outfile)
+
+
 

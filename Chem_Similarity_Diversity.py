@@ -434,10 +434,17 @@ class Diversity:
             fplist = np.array (fplist)
         print ('fps complete')
         return fplist, deletedfps
-    def DiSE_Selection (self, infile, outfile, rankcol, simcutoff, scaffold_sim_cutoff, n_chosen, minrankscore, maxviolations, hardsimcutoff, maxbbusage):
-        df = pd.read_csv(infile)
-        df = df.sort_values (rankcol, ascending=False)
+    def DiSE_Selection (self, infile_or_df, outfile, rankcol, simcutoff, scaffold_sim_cutoff, n_chosen, limitrankscore,
+                         hardsimcutoff, maxbbusage, maxviolations={'sim':0,'scaff':0}, smilescol='SMILES', rank_sortdir = 'descending', bbcycles=[],
+                        reportall=False):
+        if type (infile_or_df) == pd.DataFrame:
+            df = infile_or_df
+        else:
+            df = pd.read_csv(infile_or_df)
+        df = df.sort_values (rankcol, ascending=rank_sortdir == 'ascending')
         df ['chosen'] = 'Unknown'
+        df ['group'] = -1
+        df ['reason'] = 'Unknown'
         chosen = 0
 
         chosen_strux = []
@@ -445,11 +452,15 @@ class Diversity:
         numexamined = 0
         bbusage = {}
         bbusageelim = 0
+        currgroup = 0
         for ix, r in df.iterrows ():
-            if (r [rankcol] < minrankscore ):
+            df.loc[ix, 'group'] = -1
+            if (limitrankscore != -1 and ((rank_sortdir == 'descending' and r [rankcol] < limitrankscore )
+                                          or  (rank_sortdir == 'ascending' and r [rankcol] > limitrankscore ))):
                 break
+
             numexamined += 1
-            smi = r ['smiles']
+            smi = r [smilescol]
             df.loc [ix,'chosen'] ='Yes'
 
             m = Chem.MolFromSmiles(smi)
@@ -457,50 +468,71 @@ class Diversity:
             sc = MScaff.MakeScaffoldGeneric(m)
             sc = MScaff.GetScaffoldForMol(sc)
             scfp = Chem.GetMorganFingerprintAsBitVect(sc, radius=2, nBits=1024, useFeatures=False)
-            violations = 0
-            if r['BB1'] in  bbusage and bbusage [r['BB1']] >= maxbbusage:
-                df.loc[ix, 'chosen'] = 'No'
-                bbusageelim += 1
-            else:
+            violations = {}
+            violations['sim'] = 0
+            violations ['scaff'] = 0
+
+            excl_bbusage = False
+            for cyc in bbcycles:
+                if r[cyc] in  bbusage and bbusage [r[cyc]] >= maxbbusage:
+                    df.loc[ix, 'chosen'] = 'No'
+                    df.loc[ix,'reason'] = 'bbusage'
+                    bbusageelim += 1
+                    excl_bbusage = True
+                    break
+
+            if excl_bbusage == False:
                 for comp_mfp in chosen_strux:
                     tan = Chem.DataStructs.FingerprintSimilarity(mfp, comp_mfp [0] )
+
                     if tan >= simcutoff:
-                        violations += 1
-                        if (violations >= maxviolations or tan >= hardsimcutoff):
+                        violations ['sim'] += 1
+                        df.loc[ix, 'group'] = comp_mfp[2]
+                        if (violations['sim'] >= maxviolations['sim'] or tan >= hardsimcutoff):
                             df.loc[ix, 'chosen'] = 'No'
+                            df.loc[ix, 'reason'] = 'sim/hardcutoff/simviolations' + str (round (tan,2))
                         continue
                     scaff_tan = Chem.DataStructs.FingerprintSimilarity(scfp, comp_mfp[1])
                     if scaff_tan >= scaffold_sim_cutoff:
-                        violations += 1
-                        if (violations >= maxviolations ):
+                        violations['scaff'] += 1
+                        if (violations['scaff'] >= maxviolations['scaff'] ):
                             df.loc[ix, 'chosen'] = 'No'
+                            df.loc[ix, 'group'] = comp_mfp[2]
+                            df.loc[ix, 'reason'] = 'scaffsim/scaffviolations:' + str (round (scaff_tan,2)) + ':'  + str(violations['scaff'])
                         continue
+
             if df.loc[ix, 'chosen'] != 'No':
                 df.loc[ix, 'chosen'] = 'Yes'
-                chosen_strux.append([mfp, scfp])
+                if df.loc[ix, 'group'] == -1:
+                    df.loc[ix, 'group'] = currgroup
+                    chosen_strux.append([mfp, scfp, currgroup])
+                    currgroup += 1
+                else:
+                    chosen_strux.append([mfp, scfp, df.loc[ix, 'group'] ])
+                df.loc[ix, 'reason'] = 'OK'
                 chosen += 1
                 if r[rankcol] < min_score:
                     min_score = r[rankcol]
-                if chosen > n_chosen:
+                if n_chosen != -1 and chosen > n_chosen:
                     break
-                bb1 = r['BB1']
-                bb2 = r['BB2']
-                if bb1 not in bbusage:
-                    bbusage [bb1] = 1
-                else:
-                    bbusage [bb1] += 1
-                if bb2 not in bbusage:
-                    bbusage [bb2] = 1
-                else:
-                    bbusage [bb2] += 1
-                print (chosen, ' out of ', (numexamined), min_score, bbusageelim)
+                for cyc in bbcycles:
+                    bbx = r[cyc]
+                    if bbx not in bbusage:
+                        bbusage [bbx] = 1
+                    else:
+                        bbusage [bbx] += 1
+                print (chosen, ' out of ',(numexamined),' groups:',  currgroup,  min_score, bbusageelim)
+
+
+
 
         print('final:' , min_score)
-        exdf = df[df['chosen'] == 'Yes']
+        if not reportall:
+            exdf = df[df['chosen'] == 'Yes']
+        else:
+            exdf = df
         exdf.to_csv (outfile, index = False)
-            # chosen += 1
-            # if chosen >= n_chosen:
-            #     break
+
     def generatefps_dask(self, inlist, showprog=True, bitvec=False, SMILEScolname = 'SMILES'):
         def fptaskfcn(row, bitvec, showprog):
             try:
