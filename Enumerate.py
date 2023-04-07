@@ -49,6 +49,8 @@ else:
 
 
 class Enumerate:
+    smilescol = '__SMILES'
+    idcol = '__BB_ID'
     rxndict = {}
 
     named_reactions = None
@@ -280,7 +282,7 @@ class Enumerate:
         def recurse_library (prev_rvals, prev_idvals, cyc_num, cycct, enum_list, outfile, ct):
             for idx, row in cyc[cycles[cyc_num]].iterrows ():
                 rvals = prev_rvals.copy ()
-                rvals.append (row ['SMILES'])
+                rvals.append (row [self.smilescol])
                 idvals = prev_idvals.copy ()
                 idvals.append(str(row ['ID']))
 
@@ -309,7 +311,7 @@ class Enumerate:
             for c_i in range(0, len(cycles)):
                 rnum = random.randint (0,len(cycvals [c_i]))
                 rcx = cycvals [c_i].iloc [rnum]
-                rvals.append (rcx['SMILES'])
+                rvals.append (rcx[self.smilescol])
                 idvals.append (rcx ['ID'])
             string_ids = [str(int) for int in idvals]
             idstr = ','.join(string_ids)
@@ -446,8 +448,8 @@ class Enumerate:
                 print ('RESLIST', len(reslist))
 
             for i, b in bdfs[level].iterrows():
-                bb = b['BB_ID']
-                bbs = b['SMILES']
+                bb = b[self.idcol]
+                bbs = b[self.smilescol]
                 if level == 0:
                     bbslist = []
 
@@ -494,7 +496,7 @@ class Enumerate:
                 picklistdf = pd.read_csv(bblistfile)
                 for ix in range (0, cycct):
                     bdfs [ix] = picklistdf[picklistdf['Cycle'] == 'BB' + str (ix + 1)]
-                    bdfs = bdfs.merge(cycdict['BB' + str (ix +1)], on=['BB_ID'], how='left')
+                    bdfs = bdfs.merge(cycdict['BB' + str (ix +1)], on=[self.idcol], how='left')
             else:
                 for ix in range(0, cycct):
                     bdfs[ix] = cycdict['BB' + str(ix+1)]
@@ -534,8 +536,8 @@ class Enumerate:
                     for ix in range (0, cycct):
                         ri = random.randint (0, len (cycdict['BB' + str (ix + 1)]))
                         b = cycdict['BB' + str (ix + 1)].iloc[ri]
-                        bb = b['BB_ID']
-                        bbs = b['SMILES']
+                        bb = b[self.idcol]
+                        bbs = b[self.smilescol]
                         bblist.append (bb)
                         bblist.append (bbs)
                     if bblist not in reslist:
@@ -745,10 +747,10 @@ class Enumerate:
             removeidxs[dx] = []
             for idx, row in bbdict[dx].iterrows():
                 try:
-                    m = Chem.MolFromSmiles(row['SMILES'])
+                    m = Chem.MolFromSmiles(row[self.smilescol])
                 except Exception as e:
                     print (filterfile)
-                    print (row ['BB_ID'], row['SMILES'])
+                    print (row [self.idcol], row[self.smilescol])
                     raise (e)
                 for v in patterndict.values():
                     if m.HasSubstructMatch(v) == True:
@@ -771,7 +773,7 @@ class Enumerate:
             exclSMARTS = []
         filters_dict[filtername]['exclude'] = exclSMARTS
         for idx, row in df.iterrows ():
-            input_mol = Chem.MolFromSMILES (row ['SMILES'])
+            input_mol = Chem.MolFromSMILES (row [self.smilescol])
             if (self.PassFilters(input_mol, filters_dict, filtername)):
                 keep_idxs.append(idx)
         df = df.iloc [keep_idxs].reset_index ()
@@ -833,9 +835,9 @@ class Enumerate:
         print('loop start')
         for idx, row in df.iterrows():
             try:
-                input_mol = Chem.MolFromSmiles(row['SMILES'])
+                input_mol = Chem.MolFromSmiles(row[self.smilescol])
                 input_mol = saltstrip.StripMol(input_mol)
-                df.iloc[idx]['SMILES'] = Chem.MolToSmiles(input_mol)
+                df.iloc[idx][self.smilescol] = Chem.MolToSmiles(input_mol)
             except:
                 input_mol = None
             if input_mol is not None:
@@ -849,7 +851,7 @@ class Enumerate:
             os.makedirs(outpath)
 
         for ln in listnames:
-            cdf = df[df[ln] == 'Y'].drop_duplicates(subset=['BB_ID']).reset_index(drop=True)
+            cdf = df[df[ln] == 'Y'].drop_duplicates(subset=[self.idcol]).reset_index(drop=True)
             if type(names_dict[ln]) == list:
                 for ix in range(0, len(names_dict[ln])):
                     cdf.to_csv(outpath + '/' + libname + '.' + names_dict[ln][ix] + '.csv', index=False)
@@ -879,14 +881,16 @@ class Enumerate:
                 if SMILEScolnames is not None and len (SMILEScolnames) > 0:
                     for smc in SMILEScolnames:
                         if smc in bbdict[cyc].columns:
-                            changecoldict[smc] = 'SMILES'
+                            changecoldict[smc] = self.smilescol
+                            break
                 if BBIDcolnames is not None and len (BBIDcolnames) > 0:
                     for bbidc in BBIDcolnames:
                         if bbidc in bbdict[cyc].columns:
-                            changecoldict[bbidc] = 'BB_ID'
+                            changecoldict[bbidc] = self.idcol
+                            break
                 if len(changecoldict) > 0:
                     bbdict[cyc] = bbdict[cyc].rename(columns=changecoldict)
-                bbdict[cyc] = bbdict[cyc].drop_duplicates(subset='BB_ID', keep="first").reset_index(drop=True)
+                bbdict[cyc] = bbdict[cyc].drop_duplicates(subset=self.idcol, keep="first").reset_index(drop=True)
         return bbdict
 
     def pull_BBs(self, inpath, idcol, smilescol):
@@ -896,12 +900,12 @@ class Enumerate:
             if full_df is None:
                 full_df = pd.read_csv(f)
                 full_df = full_df[[idcol, smilescol]]
-                full_df = full_df.rename(columns={idcol: 'BB_ID', smilescol: 'SMILES'})
+                full_df = full_df.rename(columns={idcol: self.idcol, smilescol: self.smilescol})
             else:
                 df = pd.read_csv(f)
-                df = df.rename(columns={idcol: 'BB_ID', smilescol: 'SMILES'})
+                df = df.rename(columns={idcol: self.idcol, smilescol: self.smilescol})
                 try:
-                    df = df[['BB_ID', 'SMILES']].dropna()
+                    df = df[[self.idcol, self.smilescol]].dropna()
                 except:
                     print('exiting:', f)
                     exit()
@@ -939,8 +943,9 @@ class Enumerate:
             return p
 
     def Get_CycleList (self, rxnschemefile, schemename):
-        scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, FullInfo=True)
+        scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename, verbose=True, FullInfo=True)
         return scheme ['BB_Cycles']
+
     def Get_LibCycle_BBCriteria (self, rxnschemefile, schemename, cycle, fieldname='filters'):
         scheme, rxtnts = self.ReadRxnScheme(rxnschemefile, schemename,  FullInfo=True)
         if fieldname in scheme:
@@ -988,7 +993,6 @@ class EnumerationCLI :
             for x in paramdefaults:
                 if x[0] not in args or args [x[0]] is None or args[x[0]] == '':
                     args [x[0]] = x[1]
-
         specstr = args['schemespec']
         addspec = ''
         if specstr != '' and specstr is not None:
@@ -1020,7 +1024,6 @@ class EnumerationCLI :
 
         enum = Enumerate()
         print ('Starting Enumeration')
-
         outf = enum.EnumFromBBFiles(args['scheme'], args['bbspecialcode'], args['schemespec'], args['schemepath'],
                              addspec, args['numstrux'],
                              args['rxnschemefile'], SMILEScolnames=SMILEScolnames, BBcolnames=BBcolnames, rem_dups=rd, write_fails_enums=write_fails_enums)

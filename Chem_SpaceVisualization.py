@@ -9,6 +9,7 @@ import Enumeration_CombinatorialLibrary as cle
 import numpy as np
 import matplotlib
 import pathlib
+from umap import UMAP
 
 
 class Chem_SpaceVisualization:
@@ -266,7 +267,7 @@ class Chem_SpaceVisualization:
         struclist = []
         for ux in umapstruclist:
             struclist.append(ux[0])
-        fplist = self.generatefps_dask(struclist, True, bitvec=True)
+        fplist = self.div.generatefps_dask(struclist, True, bitvec=True)
         fitdata = np.vstack(fplist)
 
         print('generating umap...')

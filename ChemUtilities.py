@@ -12,11 +12,10 @@ import Enumerate
 import pathlib
 import Chem_CalcProps
 
-def SaltStripMolecules (molecules: pd.DataFrame):
+def SaltStripMolecules (molecules: pd.DataFrame, smilescol='SMILES'):
     tqdm.pandas ()
     print ('salt stripping')
-    print (molecules.columns)
-    molecules['SMILES'] = molecules['SMILES'].progress_apply(lambda smi:SaltStrip(smi))
+    molecules[smilescol] = molecules[smilescol].progress_apply(lambda smi:SaltStrip(smi))
     print ('completed salt stripping')
     return molecules
 
@@ -242,7 +241,7 @@ def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality
     try:
         m = Chem.MolFromSmiles(Kekulize_Smiles( smi))
     except:
-        return Keep
+        return Keep, [None, None, None]
     propFiltered,stats = Filters(m , filter_dict, stats =None)
     ssFiltered, df = Substructure_Filters (m, None, ssfilters, useChirality, Keep)
     ambig = False

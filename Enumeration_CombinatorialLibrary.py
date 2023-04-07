@@ -35,7 +35,7 @@ def EnumTuples_dask (rxnschemefile, libname, tuples, bbdict, cycs, tupleinfodict
         pbar = ProgressBar()
         pbar.register()
     schemeinfo = enum.ReadRxnScheme(rxnschemefile, libname, False)
-    res = ddf.apply(taskfcn, args=(rxnschemefile, bbdict, cycs, tupleinfodict, schemeinfo), meta=(0, object)).compute()
+    res = ddf.apply(taskfcn, args=(rxnschemefile, bbdict, cycs, tupleinfodict, schemeinfo), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
     if showprog:
         pbar.unregister()
     return res

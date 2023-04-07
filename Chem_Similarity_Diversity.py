@@ -33,6 +33,7 @@ if "NUMEXPR_MAX_THREADS" not in os.environ:
 numexpr.set_num_threads(numexpr.detect_number_of_cores())
 
 class Diversity:
+    workers = NUM_WORKERS
     enum = Enumerate.Enumerate()
     def DiversitySelection (self, infile, out_file, n_analyzed, ss_file, deprotect_specfile,
                             exclude_file, n_cmpds, keeporder, priority_col, priority_val, propfilters):
@@ -436,19 +437,20 @@ class Diversity:
         return fplist, deletedfps
     def DiSE_Selection (self, infile_or_df, outfile, rankcol, simcutoff, scaffold_sim_cutoff, n_chosen, limitrankscore,
                          hardsimcutoff, maxbbusage, maxviolations={'sim':0,'scaff':0}, smilescol='SMILES', rank_sortdir = 'descending', bbcycles=[],
-                        reportall=False):
+                        reportall=False, verbose = False):
         if type (infile_or_df) == pd.DataFrame:
             df = infile_or_df
         else:
             df = pd.read_csv(infile_or_df)
         df = df.sort_values (rankcol, ascending=rank_sortdir == 'ascending')
+
         df ['chosen'] = 'Unknown'
         df ['group'] = -1
         df ['reason'] = 'Unknown'
         chosen = 0
 
         chosen_strux = []
-        min_score = 1
+        min_score = -99999
         numexamined = 0
         bbusage = {}
         bbusageelim = 0
@@ -511,7 +513,11 @@ class Diversity:
                     chosen_strux.append([mfp, scfp, df.loc[ix, 'group'] ])
                 df.loc[ix, 'reason'] = 'OK'
                 chosen += 1
-                if r[rankcol] < min_score:
+                if min_score == -99999:
+                    min_score = r[rankcol]
+                elif  rank_sortdir == 'descending' and r[rankcol] < min_score:
+                    min_score = r[rankcol]
+                elif rank_sortdir == 'ascending' and r[rankcol] > min_score:
                     min_score = r[rankcol]
                 if n_chosen != -1 and chosen > n_chosen:
                     break
@@ -521,17 +527,21 @@ class Diversity:
                         bbusage [bbx] = 1
                     else:
                         bbusage [bbx] += 1
-                print (chosen, ' out of ',(numexamined),' groups:',  currgroup,  min_score, bbusageelim)
+                if verbose:
+                    print (chosen, ' out of ',(numexamined),' groups:',  currgroup,  min_score, bbusageelim)
 
 
 
 
-        print('final:' , min_score)
+        print('final score:' , min_score)
         if not reportall:
             exdf = df[df['chosen'] == 'Yes']
         else:
             exdf = df
-        exdf.to_csv (outfile, index = False)
+        if outfile is not None:
+            exdf.to_csv (outfile, index = False)
+
+        return exdf
 
     def generatefps_dask(self, inlist, showprog=True, bitvec=False, SMILEScolname = 'SMILES'):
         def fptaskfcn(row, bitvec, showprog):
@@ -550,6 +560,7 @@ class Diversity:
                 return None
             return fp
         dfmode = False
+
         if (type(inlist) == pd.DataFrame):
             inseries = inlist
             if 'SMILES' not in inseries.columns:
@@ -565,16 +576,15 @@ class Diversity:
                     slist.append(c[0])
             inseries = pd.Series(slist)
 
-
         ddf = dd.from_pandas(inseries, npartitions=CPU_COUNT * 10)
         if showprog:
             pbar = ProgressBar()
             pbar.register()
 
         if dfmode:
-            res = ddf.apply(fptaskfcn, axis = 1, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+            res = ddf.apply(fptaskfcn, axis = 1, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=self.workers)
         else:
-            res = ddf.apply(fptaskfcn, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+            res = ddf.apply(fptaskfcn, args=([bitvec, showprog]), meta=(0, object)).compute(scheduler='processes',  num_workers=self.workers)
 
         if showprog:
             pbar.unregister()
@@ -582,6 +592,7 @@ class Diversity:
         for f in res:
             fplist.append(f)
         return fplist
+
     def compfps_dask(self, fplist, compfplist, showprog=True):
         def comptaskfcn(row, compfplist):
             try:
@@ -601,9 +612,9 @@ class Diversity:
             pbar = ProgressBar()
             pbar.register()
         if dfmode:
-            res = ddf.apply(comptaskfcn, axis = 1 , args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+            res = ddf.apply(comptaskfcn, axis = 1 , args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=self.workers)
         else:
-            res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=NUM_WORKERS)
+            res = ddf.apply(comptaskfcn, args=([compfplist]), meta=(0, object)).compute(scheduler='processes',  num_workers=self.workers)
         if showprog:
             pbar.unregister()
 
@@ -615,25 +626,45 @@ class Similarity:
     def PrepBBs(self, bbdict, libname, rxnschemefile, sim_column='dummy_smiles', smiles_col='SMILES'):
         scheme, rxtnts = self.enum.ReadRxnScheme(rxnschemefile, libname, FullInfo=True)
         dummyrxtnts = scheme['scaffold_dummy_structures']
+
         cycs = []
-        for cyc in bbdict.keys():
-            cycs.append(cyc)
+        if not 'BB_Cycles' in scheme:
+            for cyc in bbdict.keys():
+                cycs.append(cyc)
+        else:
+            cycs = scheme['BB_Cycles']
+
 
         for cx in range(0, len(cycs)):
-            if bbdict [cycs[cx]] is not None:
+            if cycs[cx] in bbdict  and  bbdict[cycs[cx]] is not None:
+                bbdict[cycs[cx]] = bbdict[cycs[cx]].copy(deep=True)
+            if cycs[cx] in bbdict and bbdict [cycs[cx]] is not None:
+                bbdict[cycs[cx]] = ChemUtilities.SaltStripMolecules(bbdict [cycs[cx]], smilescol=smiles_col)
                 bbdict[cycs[cx]]['dummy_smiles'] = None
                 bbdict[cycs[cx]]['skel_smiles'] = None
                 bbdict[cycs[cx]]['scaff_smiles'] = None
 
                 rxtnts = copy.deepcopy(dummyrxtnts)
+
                 for idx, row in tqdm(bbdict[cycs[cx]].iterrows(), total=len(bbdict[cycs[cx]])):
                     rxtnts[cx] = row[smiles_col]
-                    res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
 
+                    try:
+                        res = self.enum.RunRxnScheme(rxtnts, rxnschemefile, libname, False)
+                    except Exception as e :
+                        print (rxtnts)
+                        res = ['FAIL']
                     if res[0] != 'FAIL':
-                        sdx = Chem.CanonSmiles(res[0])
-                        bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = sdx
-                        m = Chem.MolFromSmiles(sdx)
+                        try:
+                            sdx = Chem.CanonSmiles(res[0])
+                            bbdict[cycs[cx]].loc[idx, 'dummy_smiles'] = sdx
+                            m = Chem.MolFromSmiles(sdx)
+                        except:
+                            print (res[0])
+                            bbdict[cycs[cx]].loc[idx, 'dummy_smiles']='FAIL'
+                            bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = 'FAIL'
+                            bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = 'FAIL'
+                            continue
                         try:
                             scaff = MScaff.GetScaffoldForMol(m)
                             skel = MScaff.MakeScaffoldGeneric(m)
@@ -650,6 +681,8 @@ class Similarity:
                         bbdict[cycs[cx]].loc[idx, 'skel_smiles'] = 'FAIL'
                         bbdict[cycs[cx]].loc[idx, 'scaff_smiles'] = 'FAIL'
                 bbdict[cycs[cx]] = bbdict[cycs[cx]][bbdict[cycs[cx]][sim_column] != 'FAIL']
+                if len(bbdict[cycs[cx]]) == 0:
+                    print('**ALL FAILS Cycle: '+ cycs[cx])
         return bbdict
 
     def Cluster_BBs(self, path, infiles, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile, nclusters, mw_cutoff, simcolumn = 'dummy_smiles'):
@@ -667,7 +700,7 @@ class Similarity:
                 print('END LEN', len(cycdict[k]))
 
 
-        bbdict = self.PrepBBs (cycdict, libname, rxnschemefile, simcolumn )
+        bbdict = self.PrepBBs (cycdict, libname, rxnschemefile, simcolumn)
 
         div = Diversity ()
 
@@ -688,6 +721,7 @@ class Similarity:
                     opath += '/BBLists/' + libspec + '.' + k + '.clust.csv'
                 else:
                     opath += '/BBLists/' + libname + '.' + k + '.clust.csv'
+                print (opath)
 
                 bbdict [k].to_csv (opath)
                 print (opath)
@@ -802,6 +836,7 @@ class Similarity:
         print(next - start)
         start = next
         return searchdf, smilesfps
+
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
         id = splitstr[1]
@@ -849,7 +884,7 @@ class Similarity:
         hdrread = False
         probefps = []
         probesmiles = []
-        with open() as probes:
+        with open(probefile) as probes:
             for mlist in iter(lambda: list(islice(probes, N)), []):
                 for r in mlist:
                     if hdrread == True:
@@ -943,6 +978,7 @@ class Similarity:
 
         collection.close()
         outfile.close()
+
     def FindClosestList_SimMatch (self, testlist, complists):
         res = []
         for c in complists:
