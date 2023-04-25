@@ -5,38 +5,23 @@ import toml
 import pandas as pd
 from numpy import random
 from multiprocessing.pool import ThreadPool as Pool
-import time
 import threading
 import MolDisplay
 import ChemUtilities
-import dask
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
-from dask.diagnostics import ResourceProfiler
-import plotly.express as px
-import os
 from rdkit.Chem import SaltRemover
 import pathlib
 from tqdm import tqdm
-import streamlit as st
-import matplotlib.pyplot as plt
 import re
-import operator
-import sys
 import gc
 import os, psutil
-import math
 import csv
 import time
 import copy
 import argparse
 import yaml
-import plotly.graph_objects as go
-from st_aggrid import AgGrid
-from st_aggrid.grid_options_builder import  GridOptionsBuilder
-from st_aggrid import GridUpdateMode, DataReturnMode
 import numexpr
-from streamlit import runtime
 
 CPU_COUNT = os.cpu_count()
 NUM_WORKERS = CPU_COUNT * 2
@@ -636,6 +621,9 @@ class Enumerate:
             outsuff = str(rndct)
         hdrstr = ','.join (hdrs)
         schemeinfo = self.ReadRxnScheme(rxschemefile, libname, False)
+        if (schemeinfo is None):
+            print ('Failed, scheme not detected')
+            raise(13)
         if outpath is not None:
             if not write_fails_enums:
                 flist = [outpath + '.' + outsuff + '.all.csv',None, None]

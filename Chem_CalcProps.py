@@ -69,14 +69,12 @@ class Chem_CalcProps:
         grid = plt.GridSpec(math.ceil (plotlen/gridwidth), gridwidth, wspace=.8, hspace=.8)
 
         ct = 0
-        print (props.keys ())
         for p in props.keys ():
             subplt = plt.subplot( grid[int(ct/gridwidth), ct % gridwidth])
             step = (props[p][1]-props[p][0])/(props[p][2]-1)
             numsteps = (props[p][1]-props[p][0])/step
             ticks =  [float(x) for x in range (0, math.ceil(numsteps))]
             ticks = [step * t + props[p][0]  for t in ticks  ]
-            print (df.columns )
             subplt.hist(df[p], edgecolor = 'black', color='blue', bins = ticks)
             ct += 1
             subplt.set (xlabel=p, ylabel = 'Count')
