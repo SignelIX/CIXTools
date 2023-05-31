@@ -11,10 +11,10 @@ setuptools.setup(
     version="1.0.0",
     author="Eric Sigel, Citadel Discovery",
     author_email="eric@citadeldiscovery.io",
-    description="Cheminformatics Tools",
+    description="Cheminformatics Tools for combinatorial enumerations",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/<>/<>",
+    url="https://github.com/SignelIX/CIXTools",
     packages=setuptools.find_packages(),
     install_requires = requirements,
     classifiers=[

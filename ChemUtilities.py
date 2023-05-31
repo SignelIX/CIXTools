@@ -372,7 +372,8 @@ def RemoveChirality (infile_or_df, outfile, smilescol):
     df = df[rarrcols]
     df.to_csv(outfile, index=None)
 
-def SDFtoDF (infile, fix):
+def SDFtoFile (infile, fix, outfile ):
+    print ('starting conversion')
     if fix ==True:
         f=open (infile, 'rb')
         text = f.read().decode(errors='replace')
@@ -380,22 +381,75 @@ def SDFtoDF (infile, fix):
         g = open (infile, 'w')
         g.write (text)
         g.close ()
+        print('fix completed')
+    currrec = ""
 
-    sdf = Chem.SDMolSupplier (infile)
-    df = pd.DataFrame ()
+    proplist = []
+    ct = 0
+    with open(outfile, 'w') as outf:
+        outf.write ('smiles,idnumber\n')
+        with open(infile, 'r', buffering=100000) as f:
+            for line in f:
+                if line.startswith('$$$$'):
+                   currrec +=line
+                   try:
+                       sds = Chem.SDMolSupplier ()
+                       sds.SetData(currrec)
+                       mol = next(sds)
+                       smi = Chem.MolToSmiles(mol)
+                       prop_dict = mol.GetPropsAsDict()
+                       for k in prop_dict.keys ():
+                           if k not in proplist:
+                               proplist.append (k)
+                       outf.write (smi + ',' + prop_dict ['idnumber'] + '\n')
+                       ct += 1
+                   except Exception as e:
+                       print ('\n')
+                       print (e)
+                   currrec = ""
+                else:
+                   currrec += line
 
-    for sdrec in sdf:
-        props = sdrec.GetPropsAsDict ()
-        rowidx = len(df.index)
+                print ('line: ' + str(ct), end = "\r")
+        print ('completed')
 
-        for p in props:
-            if p not in df:
-                df [p]= None
-        df.loc[len(df)] = [None] * len(df.columns)
-        for p in props:
-            df.loc[rowidx][p] = props[p]
 
-    return df
+
+
+
+
+
+    # sdf = Chem.SDMolSupplier (infile)
+    # print ('load completed')
+    # cols = []
+    # ct = 0
+    #
+    #
+    # for sdrec in sdf:
+    #     props = sdrec.GetPropsAsDict ()
+    #     for p in props:
+    #         cols.append (p)
+    #     print('pass 1 structure #' + str(ct), end='\r')
+    #     ct += 1
+    # sdf.reset ()
+    # print('pass 1 completed')
+    # ct = 0
+    # fout = open (outfile, 'w')
+    # for sdrec in sdf:
+    #     linebuffer = None
+    #     props = sdrec.GetPropsAsDict()
+    #     for p in cols:
+    #         if linebuffer is not None:
+    #             linebuffer += ','
+    #         else:
+    #             linebuffer = ''
+    #         if p in props:
+    #             linebuffer += props[p]
+    #     ct += 1
+    #     print ('pass 2 structure #' + str (ct) , end='\r')
+    # fout.close ()
+    # print('pass 2 completed')
+
 
 def ConvertSDFilesFromDir (inpath, outfile):
     globlist = pathlib.Path(inpath).glob('*.sdf')
