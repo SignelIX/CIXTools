@@ -615,6 +615,8 @@ class Diversity:
 
         return list(res)
 
+
+
 class Similarity:
     chksz = 10000000
     enum = Enumerate.Enumerate ()
@@ -922,6 +924,7 @@ class Similarity:
 
         collection.close()
         outfile.close()
+
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
         fields = line.split(splitchar)
         smi = fields[smilescol]
