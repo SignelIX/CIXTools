@@ -243,8 +243,12 @@ def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality
     except:
         return Keep, [None, None, None]
     propFiltered,stats = Filters(m , filter_dict, stats =None)
-    ssFiltered, df = Substructure_Filters (m, None, ssfilters, useChirality, Keep)
+    if ssfilters is not None:
+        ssFiltered, df = Substructure_Filters (m, None, ssfilters, useChirality, Keep)
+    else:
+        ssFiltered = False
     ambig = False
+
     if (AmbiguousChirality == True):
         ambig = ContainsUnresolvedChirality(m)
 
@@ -278,7 +282,8 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
                 if line == '\n':
                     continue
                 if hdrread == True:
-                    isFiltered = pool.apply_async(ApplyFilters, args= (line, smilescol, filter_dict, splitchar, ssfilters,useChirality, AmbigChirality, Keep)).get()
+                    smi = line.split (splitchar) [smilescol]
+                    isFiltered = pool.apply_async(ApplyFilters, args= (smi, filter_dict, ssfilters,useChirality, AmbigChirality, Keep)).get()
                     if (Keep == True and isFiltered == True) or (Keep == False and isFiltered == False):
                         subct += 1
                         block += line.strip ().replace(' ',',') + '\n'
@@ -372,7 +377,7 @@ def RemoveChirality (infile_or_df, outfile, smilescol):
     df = df[rarrcols]
     df.to_csv(outfile, index=None)
 
-def SDFtoFile (infile, fix, outfile ):
+def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
     print ('starting conversion')
     if fix ==True:
         f=open (infile, 'rb')
@@ -393,6 +398,7 @@ def SDFtoFile (infile, fix, outfile ):
                 if line.startswith('$$$$'):
                    currrec +=line
                    try:
+                       currrec = currrec.replace('\n>','\n\n>')
                        sds = Chem.SDMolSupplier ()
                        sds.SetData(currrec)
                        mol = next(sds)
@@ -401,7 +407,7 @@ def SDFtoFile (infile, fix, outfile ):
                        for k in prop_dict.keys ():
                            if k not in proplist:
                                proplist.append (k)
-                       outf.write (smi + ',' + prop_dict ['idnumber'] + '\n')
+                       outf.write (smi + ',' + prop_dict [idcol] + '\n')
                        ct += 1
                    except Exception as e:
                        print ('\n')

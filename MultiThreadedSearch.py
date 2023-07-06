@@ -6,6 +6,7 @@ import tqdm
 import multiprocessing
 import time
 from operator import itemgetter
+from multiprocessing import Semaphore
 
 def fpchunkfcn(args):
     chunk, bitvec , ct, queue, SMILEScolname = args [0], args[1], args [2], args [3], args [4]
@@ -49,13 +50,15 @@ def generatefps_multiproc( filename, SMILEScolname='SMILES'):
         print (len(rets))
     for p in proclist:
         p.join ()
+
     y = time.perf_counter()
     print(y - x)
     print ('complete')
+    rets = [i for i in rets if i[1] is not None]
     return rets
 
 def comptaskfcn(args):
-    fplist, compfplist, queue= args[0], args[1], args[2]
+    fplist, compfplist, queue, sema= args[0], args[1], args[2], args [3]
     try:
         tanlist = [round(x, 2) for x in Chem.DataStructs.BulkTanimotoSimilarity(fplist, compfplist)]
     except Exception as e:
@@ -63,25 +66,37 @@ def comptaskfcn(args):
         print (str(e))
 
     queue.put ( tanlist)
+    sema.release ()
 
 def compfps_multiproc( fplist, compfplist):
     proclist = []
-    n = 10 ** 4
+    n = 10 ** 5
     x = time.perf_counter()
     queue = multiprocessing.Queue()
     ct = 0
+    numprocs = 10
+    sema = Semaphore (numprocs)
     for i in range(0, len(compfplist), n):
-        p = multiprocessing.Process(target=comptaskfcn, args=[[ fplist, compfplist [i:i + n], queue]])
+        print ('starting', end= '\r')
+        p = multiprocessing.Process(target=comptaskfcn, args=[[ fplist, compfplist [i:i + n], queue, sema]])
         proclist.append(p)
         p.start()
+        print(ct, end='\r')
         ct += 1
-
+    print('\n')
     rets = []
+    ct = 0
     for p in proclist:
         ret = queue.get()
         rets.extend(ret)
+        print (ct, end = '\r')
+        ct += 1
+    ct = 0
     for p in proclist:
         p.join()
+        print(ct, end='\r')
+        ct += 1
+
     y = time.perf_counter()
     print(y - x)
     print('complete compfps')
@@ -94,10 +109,12 @@ def Run_MultiSearch (infile,  smilescol, compfile, compsmilescol):
     rets = generatefps_multiproc(compfile, SMILEScolname=compsmilescol)
 
     for idx, row in df.iterrows():
+        print (row[smilescol])
         mol = Chem.MolFromSmiles(row[smilescol])
         fp = Chem.GetHashedMorganFingerprint(mol, radius=2, nBits=1024, useFeatures=False)
         compfplist = list(map(itemgetter(1), rets))
+        print (len(compfplist))
         tanimotos = compfps_multiproc(fp, compfplist)
         print(len(tanimotos))
-        tanimotos.sort(reverse=True)
+        tanimotos = sorted(tanimotos, key=lambda x: (not (x is None), x), reverse=True)
         print(tanimotos[0:100])

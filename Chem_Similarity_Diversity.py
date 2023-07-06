@@ -437,6 +437,9 @@ class Diversity:
             df = infile_or_df
         else:
             df = pd.read_csv(infile_or_df)
+        if rankcol == 'random' and 'random' not in df.columns:
+            df ['random'] = np.random.rand (len(df))
+
         df = df.sort_values (rankcol, ascending=rank_sortdir == 'ascending')
 
         df ['chosen'] = 'Unknown'
@@ -450,7 +453,10 @@ class Diversity:
         bbusage = {}
         bbusageelim = 0
         currgroup = 0
-        for ix, r in df.iterrows ():
+        t = tqdm(df.iterrows(), total=len(df))
+
+        for ix, r in t:
+            t.set_description_str( desc=str(chosen) + ' chosen, current score ' + str(min_score))
             df.loc[ix, 'group'] = -1
             if (limitrankscore != -1 and ((rank_sortdir == 'descending' and r [rankcol] < limitrankscore )
                                           or  (rank_sortdir == 'ascending' and r [rankcol] > limitrankscore ))):
@@ -460,25 +466,32 @@ class Diversity:
             smi = r [smilescol]
             df.loc [ix,'chosen'] ='Yes'
 
-            m = Chem.MolFromSmiles(smi)
-            mfp = Chem.GetMorganFingerprintAsBitVect(m, radius=2, nBits=1024, useFeatures=False)
-            sc = MScaff.MakeScaffoldGeneric(m)
-            sc = MScaff.GetScaffoldForMol(sc)
-            scfp = Chem.GetMorganFingerprintAsBitVect(sc, radius=2, nBits=1024, useFeatures=False)
+            try:
+                m = Chem.MolFromSmiles(smi)
+                mfp = Chem.GetMorganFingerprintAsBitVect(m, radius=2, nBits=1024, useFeatures=False)
+                sc = MScaff.MakeScaffoldGeneric(m)
+                sc = MScaff.GetScaffoldForMol(sc)
+                scfp = Chem.GetMorganFingerprintAsBitVect(sc, radius=2, nBits=1024, useFeatures=False)
+            except:
+                df.loc[ix, 'chosen'] = 'No'
+                df.loc[ix, 'group'] = None
+                df.loc[ix, 'reason'] = 'Failed Structure'
+
             violations = {}
             violations['sim'] = 0
             violations ['scaff'] = 0
 
             excl_bbusage = False
-            for cyc in bbcycles:
-                if r[cyc] in  bbusage and bbusage [r[cyc]] >= maxbbusage:
-                    df.loc[ix, 'chosen'] = 'No'
-                    df.loc[ix,'reason'] = 'bbusage'
-                    bbusageelim += 1
-                    excl_bbusage = True
-                    break
+            if df.loc[ix, 'chosen'] != 'No':
+                for cyc in bbcycles:
+                    if r[cyc] in  bbusage and bbusage [r[cyc]] >= maxbbusage:
+                        df.loc[ix, 'chosen'] = 'No'
+                        df.loc[ix,'reason'] = 'bbusage'
+                        bbusageelim += 1
+                        excl_bbusage = True
+                        break
 
-            if excl_bbusage == False:
+            if excl_bbusage == False and df.loc[ix, 'chosen'] != 'No':
                 for comp_mfp in chosen_strux:
                     tan = Chem.DataStructs.FingerprintSimilarity(mfp, comp_mfp [0] )
 
