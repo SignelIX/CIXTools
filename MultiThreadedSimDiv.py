@@ -36,7 +36,6 @@ def generatefps_multiproc( filename, SMILEScolname='SMILES'):
     x = time.perf_counter()
     queue = multiprocessing.Queue()
     for chunk in pd.read_csv(filename, chunksize=chunksize):
-        #fpchunkfcn([chunk, False, ct])
         p =  multiprocessing.Process (target=fpchunkfcn, args = [[chunk, False, ct, queue, SMILEScolname]])
         proclist.append (p)
         p.start ()
