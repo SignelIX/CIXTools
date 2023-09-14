@@ -27,32 +27,39 @@ def fpchunkfcn(args):
             fplist.append([ row [SMILEScolname],None])
     queue.put ( fplist)
 
-def generatefps_multiproc( filename, SMILEScolname='SMILES'):
+def generatefps_multiproc( filename_df, SMILEScolname='SMILES', bitvect=False):
     chunksize = 10 ** 5
     ct = 0
-    tdf = pd.read_csv(filename)
-    print (len (tdf))
+
+
     proclist = []
     x = time.perf_counter()
     queue = multiprocessing.Queue()
-    for chunk in pd.read_csv(filename, chunksize=chunksize):
-        p =  multiprocessing.Process (target=fpchunkfcn, args = [[chunk, False, ct, queue, SMILEScolname]])
-        proclist.append (p)
-        p.start ()
-        ct += 1
-
+    if type(filename_df) == str:
+        for chunk in pd.read_csv(filename_df, chunksize=chunksize):
+            p = multiprocessing.Process(target=fpchunkfcn, args=[[chunk, bitvect, ct, queue, SMILEScolname]])
+            proclist.append(p)
+            p.start()
+            ct += 1
+    else:
+        listdf = [filename_df[i:i + chunksize] for i in range(0, filename_df.shape[0], chunksize)]
+        for chunk in listdf:
+            p = multiprocessing.Process(target=fpchunkfcn, args=[[chunk, bitvect, ct, queue, SMILEScolname]])
+            proclist.append(p)
+            p.start()
+            ct += 1
 
     rets = []
     for p in proclist:
         ret = queue.get()
         rets.extend (ret)
-        print (len(rets))
+
     for p in proclist:
         p.join ()
 
+
     y = time.perf_counter()
-    print(y - x)
-    print ('complete')
+    print(y - x, 'seconds complete fp gen')
     rets = [i for i in rets if i[1] is not None]
     return rets
 
@@ -110,6 +117,7 @@ def Run_MultiSearch (infile,  smilescol, compfile, compsmilescol):
     for idx, row in df.iterrows():
         print (row[smilescol])
         mol = Chem.MolFromSmiles(row[smilescol])
+        Chem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024, useFeatures=False)
         fp = Chem.GetHashedMorganFingerprint(mol, radius=2, nBits=1024, useFeatures=False)
         compfplist = list(map(itemgetter(1), rets))
         print (len(compfplist))

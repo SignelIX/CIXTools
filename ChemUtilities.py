@@ -11,15 +11,16 @@ from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
 import Enumerate
 import pathlib
 import Chem_CalcProps
+from rdkit import RDLogger
 
-def SaltStripMolecules (molecules: pd.DataFrame, smilescol='SMILES'):
+def SaltStripMolecules (molecules: pd.DataFrame, smilescol='SMILES', neutralize = True):
     tqdm.pandas ()
     print ('salt stripping')
-    molecules[smilescol] = molecules[smilescol].progress_apply(lambda smi:SaltStrip(smi))
+    molecules[smilescol] = molecules[smilescol].progress_apply(lambda smi:SaltStrip(smi, neutralize))
     print ('completed salt stripping')
     return molecules
 
-def SaltStrip (molec):
+def SaltStrip (molec, neutralize = True):
     try:
         saltstrip = SaltRemover.SaltRemover()
         if type(molec) != Chem.Mol:
@@ -28,6 +29,7 @@ def SaltStrip (molec):
             m = molec
         m=  saltstrip.StripMol(m)
         smi = Chem.MolToSmiles(m, kekuleSmiles = False)
+        smi = Neutralize(smi)
     except:
         return molec
     return smi
@@ -457,15 +459,20 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
     # print('pass 2 completed')
 
 
-def ConvertSDFilesFromDir (inpath, outfile):
-    globlist = pathlib.Path(inpath).glob('*.sdf')
-    alldf = pd.DataFrame ()
-    for f in globlist:
-        print (f)
-        df = SDFtoDF(str(f), True)
-        alldf = pd.concat([alldf, df], axis=0, ignore_index=True)
+# def ConvertSDFilesFromDir (inpath, outfile):
+#     globlist = pathlib.Path(inpath).glob('*.sdf')
+#     alldf = pd.DataFrame ()
+#     for f in globlist:
+#         print (f)
+#       #  df = SDFtoDF(str(f), True)
+#         alldf = pd.concat([alldf, df], axis=0, ignore_index=True)
+#
+#     alldf.to_csv (outfile)
 
-    alldf.to_csv (outfile)
 
-
-
+def Canonicalize (smiles):
+    RDLogger.DisableLog('rdApp.*')
+    try:
+        return Chem.CanonSmiles (smiles)
+    except:
+        return smiles
