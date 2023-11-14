@@ -129,7 +129,7 @@ class Chem_CalcProps:
 
     def Filters(self, m, filter_dict, stats):
         if stats is None:
-            stats = {'MW': 0, 'tPSA': 0, 'logP': 0, 'rotB':0}
+            stats = {'MW': 0, 'tPSA': 0, 'logP': 0, 'rotB':0, 'hbd':0, 'hba':0}
         if filter_dict is None:
             return False, stats;
         if ('MW_high' in filter_dict) or ('MW_low' in filter_dict):
@@ -171,6 +171,30 @@ class Chem_CalcProps:
             rotb_high = filter_dict['RotB_high']
             if rotB > rotb_high:  # aLogP
                 stats['rotB'] += 1
+                return True, stats
+        if ('HBD_low' in filter_dict) or ('HBD_high' in filter_dict):
+            hbd = rdMolDescriptors.CalcNumHBD(m)
+        if ('HBD_low' in filter_dict):
+            hbd_low = filter_dict['HBD_low']
+            if hbd < hbd_low:
+                stats['hbd'] += 1
+                return True, stats
+        if ('HBD_high' in filter_dict):
+            hbd_high = filter_dict['HBD_high']
+            if hbd > hbd_high:
+                stats['hbd'] += 1
+                return True, stats
+        if ('HBA_low' in filter_dict) or ('HBA_high' in filter_dict):
+            hba = rdMolDescriptors.CalcNumHBA(m)
+        if ('HBA_low' in filter_dict):
+            hba_low = filter_dict['HBA_low']
+            if hba < hba_low:
+                stats['hba'] += 1
+                return True, stats
+        if ('HBA_high' in filter_dict):
+            hba_high = filter_dict['HBA_high']
+            if hba > hba_high:
+                stats['hba'] += 1
                 return True, stats
 
         return False, stats

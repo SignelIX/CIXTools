@@ -363,6 +363,7 @@ class Diversity:
             fplist.append(arr)
         uniquect = len(cmpdlist)- dupct
         return fplist, uniquect
+
     def Get_FPArrayAsVstack(self, cmpdlist, hidetqdm=False, verbose = True):
         fplist = []
         deletedfps = []
@@ -437,6 +438,7 @@ class Diversity:
             df = infile_or_df
         else:
             df = pd.read_csv(infile_or_df)
+
         if rankcol == 'random' and 'random' not in df.columns:
             df ['random'] = np.random.rand (len(df))
 

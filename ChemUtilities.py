@@ -13,6 +13,11 @@ import pathlib
 import Chem_CalcProps
 from rdkit import RDLogger
 
+def SaltStripFile (infile, smilescol, outfile):
+    df  = pd.read_csv (infile)
+    df = SaltStripMolecules(df, smilescol)
+    df.to_csv(outfile, index=False)
+
 def SaltStripMolecules (molecules: pd.DataFrame, smilescol='SMILES', neutralize = True):
     tqdm.pandas ()
     print ('salt stripping')
@@ -223,7 +228,7 @@ def Add_Properties (filename, prop_list):
                 logP = Descr.MolLogP (m)
                 df.at[idx,'logP'] = logP
             if idx%1000 == 0:
-                print (idx)
+                print (idx, end = '\r')
         except:
             continue
 
@@ -264,7 +269,7 @@ def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality
         return propFiltered or ssFiltered or ambig, [propFiltered, ssFiltered, ambig]
 
 
-def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False):
+def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
     print ('Filtering')
     N = 10000
     pool_size =  8
@@ -301,8 +306,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
             pool.close()
             pool.join()
             ct = ct + 1
-            print (ct * N)
-            print (subct)
+            #print ('count: ', ct * N, 'remaining: ', subct, end='\r')
         print ('joined')
     collection.close ()
     outfile.close ()
