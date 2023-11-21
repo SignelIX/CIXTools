@@ -305,7 +305,7 @@ class CompleteBlock ():
             self.outfile.write(blocklist [0] + '\n')
             self.removedfile.write(blocklist[1] + '\n')
             self.lock.release()
-            print ('BLOCK:', self.blockct, end = '\r' )
+            print ('Completing BLOCK:', self.blockct, end = '\r' )
 
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
@@ -326,6 +326,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
         smilescol = hdrlist.index(matching[0])
         blocknum = 0
         outfile.write (line + '\n')
+        print('Starting BLOCK:', self.blockct, end='\r')
         for mlist in iter(lambda: list(islice(collection, N)), []):
             blocknum +=1
             pool.apply_async(Process_Block, args=(mlist, smilescol, splitchar,  filter_dict, ssfilters, useChirality, AmbigChirality, Keep, blocknum), callback=CB.CompleteBlockAsync)
