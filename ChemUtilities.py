@@ -288,7 +288,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
         print(hdrlist)
         hdrlist = [sx.upper() for sx in hdrlist]
         matching = [s for s in hdrlist if "SMILES" in s]
-        print ('MATCHINGxx: ', matching)
+        print ('MATCHING: ', matching)
 
         smilescol = hdrlist.index(matching[0])
         # hdrread = True
