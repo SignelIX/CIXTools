@@ -12,6 +12,8 @@ import Enumerate
 import pathlib
 import Chem_CalcProps
 from rdkit import RDLogger
+import time
+import threading
 
 def SaltStripFile (infile, smilescol, outfile):
     df  = pd.read_csv (infile)
@@ -268,50 +270,68 @@ def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality
             return propFiltered or ssFiltered or ambig
         return propFiltered or ssFiltered or ambig, [propFiltered, ssFiltered, ambig]
 
+def Process_Block (mlist, smilescol, splitchar, filter_dict, ssfilters, useChirality, AmbigChirality, Keep, blocknum):
+    block = ''
+    removedblock = ''
+    ct = 0
+    for line in mlist:
+        if line == '\n':
+            continue
+        smi = line.split(splitchar)[smilescol]
+        isFiltered = ApplyFilters(smi, filter_dict, ssfilters, useChirality, AmbigChirality, Keep)
+        if (Keep == True and isFiltered == True) or (Keep == False and isFiltered == False):
+            block += line.strip().replace(' ', ',') + '\n'
+        else:
+            removedblock += line.strip().replace(' ', ',') + '\n'
+        ct += 1
+        print ('Count:',blocknum, ':',  ct, end = '\r')
+    return block, removedblock
+
+class CompleteBlock ():
+    tic = None
+    lock = None
+    outfile = None
+    blockct = 0
+
+    def __init__ (self, outf, remf):
+        self.tic = time.perf_counter()
+        self.lock = threading.Lock()
+        self.outfile = outf
+        self.removedfile = remf
+
+    def CompleteBlockAsync (self, blocklist):
+        if blocklist is not None:
+            self.lock.acquire()
+            self.blockct = self.blockct + 1
+            self.outfile.write(blocklist [0] + '\n')
+            self.removedfile.write(blocklist[1] + '\n')
+            self.lock.release()
+            print ('\nBLOCK:', self.blockct )
+
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
     print ('Filtering')
     N = 10000
     pool_size =  40
-    subct = 0
-    hdrread = False
-    lct = 0
-
+    pool = Pool(pool_size)
     outfile = open (outfilename, 'w')
-    ct = 0
+    remf =open (outfilename.replace ('.csv','') + 'removed.csv', 'w')
     ssfilters = Read_FilterFile(ss_file)
-
+    CB = CompleteBlock(outfile, remf)
 
     with open (catfile) as collection:
         line = collection.readline()
         hdrlist = line.split(splitchar)
-        print(hdrlist)
         hdrlist = [sx.upper() for sx in hdrlist]
         matching = [s for s in hdrlist if "SMILES" in s]
-        print ('MATCHING: ', matching)
-
         smilescol = hdrlist.index(matching[0])
-        # hdrread = True
-        # block += line.strip().replace(' ', ',') + '\n'
-        for mlist in tqdm (iter(lambda: list(islice(collection, N)), []), total=len(list(islice(collection, N)))):
-            pool = Pool(pool_size)
-            block = ''
-            for line in mlist:
-                if line == '\n':
-                    continue
+        blocknum = 0
+        for mlist in iter(lambda: list(islice(collection, N)), []):
+            blocknum +=1
+            pool.apply_async(Process_Block, args=(mlist, smilescol, splitchar,  filter_dict, ssfilters, useChirality, AmbigChirality, Keep, blocknum), callback=CB.CompleteBlockAsync)
+        pool.close()
+        pool.join()
 
-                smi = line.split (splitchar) [smilescol]
-                isFiltered = pool.apply_async(ApplyFilters, args= (smi, filter_dict, ssfilters,useChirality, AmbigChirality, Keep)).get()
-                if (Keep == True and isFiltered == True) or (Keep == False and isFiltered == False):
-                    subct += 1
-                    block += line.strip ().replace(' ',',') + '\n'
-                lct = lct + 1
-            outfile.write(block)
-            pool.close()
-            pool.join()
-            ct = ct + 1
-            #print ('count: ', ct * N, 'remaining: ', subct, end='\r')
-        print ('joined')
     collection.close ()
     outfile.close ()
 
@@ -428,13 +448,6 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
 
                 print ('line: ' + str(ct), end = "\r")
         print ('completed')
-
-
-
-
-
-
-
     # sdf = Chem.SDMolSupplier (infile)
     # print ('load completed')
     # cols = []
@@ -465,8 +478,6 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
     #     print ('pass 2 structure #' + str (ct) , end='\r')
     # fout.close ()
     # print('pass 2 completed')
-
-
 # def ConvertSDFilesFromDir (inpath, outfile):
 #     globlist = pathlib.Path(inpath).glob('*.sdf')
 #     alldf = pd.DataFrame ()
@@ -477,10 +488,15 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
 #
 #     alldf.to_csv (outfile)
 
-
 def Canonicalize (smiles):
     RDLogger.DisableLog('rdApp.*')
     try:
         return Chem.CanonSmiles (smiles)
     except:
         return smiles
+
+if __name__== "__main__":
+    infile = '/Users/eric/.COVolumes/_citadel-internal/citadel-momatx/predictions/rad/231112_529/Enamine_hts_collection_202305.saltstripped.preds.csv/Enamine_hts_collection_202305.saltstripped.preds.csv'
+    outfile = '/Users/eric/Temp/enamine.Filtered.csv'
+    filterdict = {'MW_low': 275, 'MW_high': 650, 'overwrite': True}
+    Filter_File(infile, outfile, ',', filterdict, None, False, False)
