@@ -284,7 +284,6 @@ def Process_Block (mlist, smilescol, splitchar, filter_dict, ssfilters, useChira
         else:
             removedblock += line.strip().replace(' ', ',') + '\n'
         ct += 1
-        print ('Count:',blocknum, ':',  ct, end = '\r')
     return block, removedblock
 
 class CompleteBlock ():
@@ -306,7 +305,7 @@ class CompleteBlock ():
             self.outfile.write(blocklist [0] + '\n')
             self.removedfile.write(blocklist[1] + '\n')
             self.lock.release()
-            print ('\nBLOCK:', self.blockct )
+            print ('BLOCK:', self.blockct, end = '\r' )
 
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
