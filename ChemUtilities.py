@@ -296,6 +296,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
                         block += line.strip ().replace(' ',',') + '\n'
                 else:
                     hdrlist = line.split (splitchar)
+                    print (hdrlist)
                     hdrlist = [sx.upper() for sx in hdrlist]
                     matching = [s for s in hdrlist if "SMILES" in s]
                     smilescol = hdrlist.index (matching[0])
