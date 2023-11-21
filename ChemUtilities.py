@@ -326,8 +326,9 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
         smilescol = hdrlist.index(matching[0])
         blocknum = 0
         outfile.write (line + '\n')
-        print('Starting BLOCK:', self.blockct, end='\r')
+
         for mlist in iter(lambda: list(islice(collection, N)), []):
+            print('Starting BLOCK:', blocknum, end='\r')
             blocknum +=1
             pool.apply_async(Process_Block, args=(mlist, smilescol, splitchar,  filter_dict, ssfilters, useChirality, AmbigChirality, Keep, blocknum), callback=CB.CompleteBlockAsync)
         pool.close()
