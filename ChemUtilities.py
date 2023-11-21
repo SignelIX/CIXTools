@@ -272,7 +272,7 @@ def ApplyFilters ( smi, filter_dict, ssfilters, useChirality, AmbiguousChirality
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
     print ('Filtering')
     N = 10000
-    pool_size =  8
+    pool_size =  1
     subct = 0
     hdrread = False
     lct = 0
@@ -280,6 +280,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
     outfile = open (outfilename, 'w')
     ct = 0
     ssfilters = Read_FilterFile(ss_file)
+
 
     with open (catfile) as collection:
         for mlist in tqdm (iter(lambda: list(islice(collection, N)), []), total=len(list(islice(collection, N)))):
