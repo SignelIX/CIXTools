@@ -282,7 +282,7 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
     ssfilters = Read_FilterFile(ss_file)
 
     with open (catfile) as collection:
-        for mlist in iter(lambda: list(islice(collection, N)), []):
+        for mlist in tqdm (iter(lambda: list(islice(collection, N)), []), total=len(list(islice(collection, N)))):
             pool = Pool(pool_size)
             block = ''
             for line in mlist:

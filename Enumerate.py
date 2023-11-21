@@ -174,6 +174,12 @@ class Enumerate:
                         else:
                             reaction = 'FAIL'
                             continue
+                    if rxn == 'C' or rxn == '[C;H4]':
+                        print ('HERE2')
+                        if reactants[0] == 'C' or reactants [1] == 'C':
+                            reaction = step["Rxns"][rxn]
+                            print ('HERE', reaction)
+                            break
                     if rxn == 'SKIPCYC':
                         if reactants[0] == 'SKIPCYC' or reactants[1] == 'SKIPCYC':
                             reaction = step["Rxns"][rxn]
@@ -202,6 +208,7 @@ class Enumerate:
                             reaction ='FAIL'
             if reaction == 'FAIL' and "default" in step["Rxns"] :
                 reaction = step["Rxns"]["default"]
+            print ('ENDRXN:', reaction)
         return reactants, reaction
 
     def Read_ReactionDatabase (self, rxnfile):
@@ -243,7 +250,10 @@ class Enumerate:
                         reaction = [reaction]
                     for r in reaction:
                         if r in self.named_reactions:
-                            rlist.extend (self.named_reactions [r])
+                            if type (self.named_reactions [r] ) == str:
+                                rlist.append (self.named_reactions [r])
+                            else:
+                                rlist.extend (self.named_reactions [r])
                         else:
                             rlist.append (r)
                     reaction = rlist
@@ -967,6 +977,10 @@ class EnumerationCLI :
                             help='Remove duplicate structures (True/False)')
         parser.add_argument('-wfe', '--write_fails_enums', nargs='?', default=None, type=str,
                             help='Write Fails and Enumerated Molecules in separate files (True/False)')
+        parser.add_argument('-rxntest', '--rxntest', nargs=2, default=None, type=str,
+                            help='2 reactants SMILES')
+        parser.add_argument('-rxn', '--rxn', nargs=1, default=None, type=str,
+                            help='Reaction SMARTS')
         args = vars(parser.parse_args())
 
         if args['paramfile'] is not None:
@@ -985,6 +999,12 @@ class EnumerationCLI :
         addspec = ''
         if specstr != '' and specstr is not None:
             addspec = '/' + specstr
+
+        if 'rxntest' in args:
+            enum = Enumerate()
+            res = enum.React_Molecules(args ['rxntest'] [0],args ['rxntest'] [1] , args['rxn'], True)
+            print (res[0])
+            exit ()
 
         if 'removedups' in args:
             if args['removedups'] not in [True, False]:

@@ -9,6 +9,7 @@ from streamlit import runtime
 class CIXTools_MainUI:
     page = 'HOME'
     def __init__(self):
+        st.set_page_config(layout="wide")
         st.session_state['MAIN'] = True
     def head(self):
         st.markdown("""

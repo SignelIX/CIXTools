@@ -19,8 +19,8 @@ import Enumerate
 class EnumerationUI:
     enum = Enumerate.Enumerate()
     initpath = '../CIxTools.init.json'
-    smiles_colnames = None
-    bbid_colnames = None
+    smiles_colnames = ['SMILES', 'smiles']
+    bbid_colnames = ['BB_ID', 'id']
     paramslist = ['enumerate_rxnscheme', 'enumerate_remdups',  'enumerate_lastschemepath', 'enumerate_specstr', 'enumerate_schemename', 'enumerate_rndcount']
 
     def __init__ (self):
@@ -32,8 +32,7 @@ class EnumerationUI:
                 if p in initjson:
                     st.session_state[p] = initjson [p]
                     if p == 'enumerate_rxnscheme':
-                        self.enum.named_reactions = self.enum.ReadRxnScheme(st.session_state['enumerate_rxnscheme'],'Named_Reactions', FullInfo=True)[0]
-                        print ('NAMED Rxns:', self.enum.named_reactions )
+                        self.Init_RxnSchemeFile()
                 else:
                     st.session_state[p] = ''
 
@@ -103,11 +102,19 @@ class EnumerationUI:
             jsonFile.write(json.dumps(data, indent=4))
 
     def Init_RxnSchemeFile (self):
-        self.enum.named_reactions= self.enum.ReadRxnScheme(st.session_state ['enumerate_rxnscheme'], 'Named_Reactions', FullInfo = True )[0]
+        self.enum.named_reactions = {}
+        self.enum.named_reactions.update(self.enum.ReadRxnScheme(st.session_state ['enumerate_rxnscheme'], 'Named_Reactions', FullInfo = True )[0])
+        with open(self.initpath, "r") as jsonFile:
+            data = json.load(jsonFile)
+        for rxl in data ['rxnlists']:
+            with open(rxl, "r") as jsonFile:
+                data = json.load(jsonFile)
+            self.enum.named_reactions.update (data)
+        print ('NAMED CT:', len (data.keys ()))
         self.SaveToInit ()
 
     def body(self):
-        smilescol='SMILES'
+        smilescol='__SMILES'
 
         if 'enumerate_specstr' not in st.session_state:
             st.session_state['enumerate_specstr'] = 'Empty'
@@ -280,13 +287,14 @@ class EnumerationUI:
                     if st.button (label = 'Add Step'):
                         print (st.session_state ['enumerate_lastschemedef'])
                         defjson = json.loads(st.session_state ['enumerate_lastschemedef'] )
+
                         stepdict = {}
                         stepdict ["Reactants"] = []
                         stepdict["Rxns"] = {'default':''}
                         defjson ['steps'].append (stepdict)
                         st.session_state['enumerate_lastschemedef'] = json.dumps (defjson, indent=4)
                 with dcol1:
-                    st.text_area(height=200, label='Scheme Definition', key='enumerate_lastschemedef')
+                    st.text_area(height=450, label='Scheme Definition', key='enumerate_lastschemedef')
 
         with cont2:
             with st.expander (label='Export'):
@@ -314,14 +322,16 @@ class EnumerationUI:
                         st.text('Reactants not correctly loaded')
                     else:
                         try:
+                            self.Init_RxnSchemeFile ()
                             res, intermeds, rxninfo= self.enum.TestReactionScheme(schemename, rxtnts, st.session_state ['enumerate_lastschemedef'], True)
                             if res is None or res == 'FAIL' or res.startswith ('FAIL') or res == 'NOSCHEMEFAIL':
                                 st.text ('Reaction Failure: ' + res)
                             else:
                                 try:
-                                    st.pyplot(MolDisplay.ShowMol(res))
+                                    st.image(MolDisplay.ShowMols([res], cols=1, subImgSize=(600, 600),
+                                                                 outtype='b64_datauri'))
                                 except Exception as e2:
-                                    st.text ('EXCEPTION:',e2)
+                                    st.text ('EXCEPTION:' + str(e2))
 
 
                         except Exception as e:
@@ -332,6 +342,7 @@ class EnumerationUI:
                             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                             st.text (str(exc_type) + ' ' +  fname + ' ' + str( exc_tb.tb_lineno))
                             st.text (e)
+                            intermeds = None
             with cont4:
                 coly1, coly2 = st.columns (2)
                 with coly1:
@@ -339,14 +350,18 @@ class EnumerationUI:
                         st.image(MolDisplay.ShowMols(rxtnts, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
                 with coly2:
                     with st.expander(label='Reaction Products'):
-                        st.image(MolDisplay.ShowMols(intermeds, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
+                        if intermeds is not None and len (intermeds) > 0:
+                            st.image(MolDisplay.ShowMols(intermeds, cols=1, subImgSize=(400, 200), outtype='b64_datauri'))
                 displist = []
-                print (len(rxtnts), len(intermeds), len(rxninfo))
                 for x in range (0, len(rxtnts)):
-                    if len (intermeds) - 1 < x:
-                        displist.append([rxtnts[x], None, rxninfo[x]])
-                    else:
-                        displist.append ([rxtnts [x], intermeds[x], rxninfo [x]])
+                    if intermeds is not None:
+                        if  len (intermeds) - 1 < x:
+                            if len (rxninfo) - 1 < x:
+                                displist.append([rxtnts[x], None, None])
+                            else:
+                                displist.append([rxtnts[x], None, rxninfo[x]])
+                        else:
+                            displist.append ([rxtnts [x], intermeds[x], rxninfo [x]])
                 dispdf = pd.DataFrame (displist, columns = ['Reactant', 'Intermediate','RxnInfo'])
                 with st.expander (label='Rxn Info Grid'):
                     MolDisplay.ShowMols_StreamLit_Grid (dispdf,['Reactant', 'Intermediate'], rowheight = 200 )
@@ -359,6 +374,6 @@ class EnumerationUI:
 if __name__=="__main__":
     if runtime.exists ():
         enum = EnumerationUI ()
-        enum.RunUI ()
+        enum.RunUbI ()
 
 
