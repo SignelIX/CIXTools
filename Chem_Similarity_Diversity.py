@@ -10,9 +10,11 @@ import random
 from tqdm import tqdm
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
-from Archive import Enumerate
+import Enumerate
 from itertools import islice
-from multiprocessing.pool import ThreadPool as Pool
+from multiprocessing.pool import ThreadPool as ThreadPool
+from multiprocessing import Pool as ProcPool
+import threading
 import operator
 import math
 import copy
@@ -602,6 +604,7 @@ class Diversity:
         for f in res:
             fplist.append(f)
         return fplist
+
     def compfps_dask(self, fplist, compfplist, showprog=True):
         def comptaskfcn(row, compfplist):
             try:
@@ -628,6 +631,8 @@ class Diversity:
             pbar.unregister()
 
         return list(res)
+
+
 
 class Similarity:
     chksz = 10000000
@@ -693,6 +698,7 @@ class Similarity:
                 if len(bbdict[cycs[cx]]) == 0:
                     print('**ALL FAILS Cycle: '+ cycs[cx])
         return bbdict
+
     def Cluster_BBs(self, path, infiles, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile, nclusters, mw_cutoff, simcolumn = 'dummy_smiles'):
         if infiles is not None:
             infilelist = infiles
@@ -734,6 +740,7 @@ class Similarity:
                 bbdict [k].to_csv (opath)
                 print (opath)
         return
+
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None, addtlcols=None):
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
         reslist = []
@@ -765,6 +772,7 @@ class Similarity:
 
             next += 1
         return outlist
+
     def TanimotoComparison (self, smiles1, smiles2 ):
         #currently hardcoded to Morgan2
         try:
@@ -842,6 +850,7 @@ class Similarity:
         print(next - start)
         start = next
         return searchdf, smilesfps
+
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
         id = splitstr[1]
@@ -914,7 +923,7 @@ class Similarity:
 
         with open(catfile) as collection:
             for mlist in iter(lambda: list(islice(collection, N)), []):
-                pool = Pool(pool_size)
+                pool = ThreadPool (pool_size)
                 block = ''
                 for line in mlist:
                     if hdrread == True:
@@ -931,7 +940,8 @@ class Similarity:
                 ct = ct + 1
 
         collection.close()
-        outfile.close(
+        outfile.close()
+
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
         fields = line.split(splitchar)
         smi = fields[smilescol]
@@ -959,7 +969,7 @@ class Similarity:
         ct = 0
         with open(catfile) as collection:
             for mlist in iter(lambda: list(islice(collection, N)), []):
-                pool = Pool(pool_size)
+                pool = ThreadPool(pool_size)
                 block = ''
                 for line in mlist:
                     if line == '\n':
@@ -983,6 +993,7 @@ class Similarity:
 
         collection.close()
         outfile.close()
+
     def FindClosestList_SimMatch (self, testlist, complists):
         res = []
         for c in complists:
@@ -1002,29 +1013,72 @@ class Similarity:
             res.append (sumtanscores/tanct)
         return res
 
+#region Generate Scaffolds
+def ScaffTask (chunk, num, smilescol):
+    scaffsmi_list = []
+    issuesct = 0
+    for idx, row in chunk.iterrows():
+        smi = row[smilescol]
+        try:
+            m = Chem.MolFromSmiles(smi)
+        except:
+            scaffsmi_list.append('N/A')
+            issuesct += 1
+            continue
+        #mfp = Chem.GetMorganFingerprintAsBitVect(m, radius=2, nBits=1024, useFeatures=False)
+        sc = MScaff.MakeScaffoldGeneric(m)
+        sc = MScaff.GetScaffoldForMol(sc)
+        sc_smi = Chem.MolToSmiles(sc)
+        # scfp = Chem.GetMorganFingerprintAsBitVect(sc, radius=2, nBits=1024, useFeatures=False)
+        scaffsmi_list.append(sc_smi)
+        print ('block num:', num, len(scaffsmi_list), 'issues:', issuesct,'                       ', end = '\r')
 
-def FPSim2_sim_matrix ():
-    from FPSim2 import FPSim2Engine
-    from FPSim2.io import create_db_file
-    # create_db_file('/Users/eric/Temp/All_ChEMBL_23_05.ss.dedup.mwfilter750.smi',
-    #                '/Users/eric/Temp/chembl.h5', 'Morgan', {'radius': 2, 'nBits': 2048}, gen_ids = True)
+    chunk['scaffold_smi'] = scaffsmi_list
+   # chunk = chunk[chunk['scaffold_smi'] != 'N/A']
+    print ('completed\n', num)
+    return chunk
 
-    fp_filename = '/Users/eric/Temp/chembl.h5'
-    fpe = FPSim2Engine(fp_filename)
-    csr_matrix = fpe.symmetric_distance_matrix(0.7, n_workers=16)
+class CompleteScaff():
+    lock = None
+    outfile = None
+    mode = None
+    ttlct = 0
 
-    # from FPSim2 import FPSim2Engine
-    #
-    # fp_filename = 'chembl_27.h5'
-    # fpe = FPSim2Engine(fp_filename)
-    #
-    # query = 'CC(=O)Oc1ccccc1C(=O)O'
-    # results = fpe.similarity(query, 0.7, n_workers=1)
-    # from FPSim2 import FPSim2Engine
-    #
-    # fp_filename = 'chembl_27.h5'
-    # fpe = FPSim2Engine(fp_filename, in_memory_fps=False)
-    #
-    # query = 'CC(=O)Oc1ccccc1C(=O)O'
-    # results = fpe.on_disk_similarity(query, 0.7, n_workers=1)
+    def __init__(self, outf):
+        self.lock = threading.Lock()
+        self.outfile = outf
+        self.mode = 'w'
 
+    def CompleteScaffAsync(self, res):
+        if res is not None:
+            self.lock.acquire()
+            res.to_csv (self.outfile , index = False, mode = self.mode)
+            self.mode = 'a'
+            print ('complete chunk')
+            self.ttlct += len (res)
+            print ('Total ct:', self.ttlct)
+            self.lock.release()
+        else:
+            print ('RES IS NONE')
+
+def Generate_Scaffolds (filename, outpath, smilescol = 'smiles'):
+    CS = CompleteScaff (outpath)
+    chunksize = 10000
+    pool_size = NUM_WORKERS
+    pool = ProcPool(pool_size)
+
+    reader = pd.read_csv(filename, chunksize=chunksize, low_memory=False)
+
+    funclist = []
+    num = 0
+    ttlct = 0
+    for df in reader:
+        ttlct += len (df)
+        print (ttlct, '           ', end ='\r')
+        f = pool.apply_async(ScaffTask, args = [df, num, smilescol], callback=CS.CompleteScaffAsync)
+        funclist.append(f)
+        num +=1
+    print ('\n', len(df))
+    pool.close ()
+    pool.join ()
+#endregion Generate Scaffolds
