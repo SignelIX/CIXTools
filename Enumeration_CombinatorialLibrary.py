@@ -2,7 +2,8 @@
 import pandas as pd
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
-import Enumerate
+from Archive import Enumerate
+
 enum = Enumerate.Enumerate()
 NUM_WORKERS = 16
 import random

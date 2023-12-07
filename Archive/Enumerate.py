@@ -63,6 +63,7 @@ class Enumerate:
             else:
                 m2 = r2
             reacts = (m1, m2)
+
         prod_ct = 0
         for r in SM_rxn:
             if r == "product":
@@ -73,7 +74,6 @@ class Enumerate:
                 if len(products) == 0:
                     product = None
                 else:
-                    ct = 0
                     if len(products) > 1:
 
                         proddict= {}
@@ -94,8 +94,9 @@ class Enumerate:
                         smi = Chem.MolToSmiles(product)
                         break
                 except:
-                    smi = None
 
+                    smi = None
+        print('SMI:', smi)
         if showmols == True:
             if smi is not None:
                 MolDisplay.ShowMols([smi, r1, r2])
@@ -175,10 +176,8 @@ class Enumerate:
                             reaction = 'FAIL'
                             continue
                     if rxn == 'C' or rxn == '[C;H4]':
-                        print ('HERE2')
                         if reactants[0] == 'C' or reactants [1] == 'C':
                             reaction = step["Rxns"][rxn]
-                            print ('HERE', reaction)
                             break
                     if rxn == 'SKIPCYC':
                         if reactants[0] == 'SKIPCYC' or reactants[1] == 'SKIPCYC':
@@ -208,7 +207,6 @@ class Enumerate:
                             reaction ='FAIL'
             if reaction == 'FAIL' and "default" in step["Rxns"] :
                 reaction = step["Rxns"]["default"]
-            print ('ENDRXN:', reaction)
         return reactants, reaction
 
     def Read_ReactionDatabase (self, rxnfile):
@@ -260,6 +258,7 @@ class Enumerate:
                 try:
                     p, outct, products = self.React_Molecules(reactants [0], reactants [1],  reaction,  showmols)
                 except:
+                    print('HERE10')
                     p = None
                     outct = 0
                 if outct > 0:
@@ -440,9 +439,8 @@ class Enumerate:
         def rec_bbpull( bdfs, level, cycct, bbslist, ct, reslist, fullct, hdrs, currct = 0, appendmode = False, retIntermeds = False):
             if reslist is None:
                 reslist = [[]] * min(chksz, fullct)
-                print ('RESLIST', len(reslist))
-
             for i, b in bdfs[level].iterrows():
+
                 bb = b[self.idcol]
                 bbs = b[self.smilescol]
                 if level == 0:
@@ -472,7 +470,6 @@ class Enumerate:
                         appendmode = True
                         gc.collect ()
 
-
             return ct, reslist,  currct, appendmode
 
         if SMILEScolnames is None:
@@ -484,6 +481,7 @@ class Enumerate:
         cycct = len (infilelist)
 
         if type(infilelist) is list:
+
             cycdict = self.load_BBlists(infilelist, BBIDcolnames, SMILEScolnames)
 
             bdfs = [None] * cycct
@@ -524,8 +522,6 @@ class Enumerate:
                 reslist = [[]] * min(rndct, chksz)
                 ct = 0
                 currct = 0
-
-
                 while ct < rndct:
                     bblist = []
                     for ix in range (0, cycct):
@@ -535,6 +531,7 @@ class Enumerate:
                         bbs = b[self.smilescol]
                         bblist.append (bb)
                         bblist.append (bbs)
+
                     if bblist not in reslist:
                         reslist[currct] = bblist
                         ct += 1
@@ -547,8 +544,8 @@ class Enumerate:
                             reslist = [[]] * min (chksz, rndct - ct)
                             currct = 0
                             appendmode = True
-
         else:
+
             resdf = infilelist
             enum_in = resdf
             hdrs = None
@@ -571,6 +568,7 @@ class Enumerate:
                 else:
                     res = [res]
             except Exception as e:
+                print(str(e))
                 res =  ['FAIL']
 
             if retIntermeds:
@@ -664,6 +662,7 @@ class Enumerate:
             df = None
             df = processchunk(enum_in, df, outpath, schemeinfo=schemeinfo,retIntermeds=retIntermeds)
 
+
         if outpath is not None:
             path = outpath + '.' + outsuff + '.all.csv'
             if removeduplicateproducts:
@@ -729,6 +728,7 @@ class Enumerate:
 
         if returndf is True:
             outpath = None
+
         outfile = self.enumerate_library_strux(libname, rxschemefile, infilelist, outpath, num_strux, picklistfile,
                                                SMILEScolnames=SMILEScolnames, BBIDcolnames=BBcolnames, removeduplicateproducts=rem_dups, write_fails_enums=write_fails_enums, retIntermeds = retIntermeds)
         return outfile
