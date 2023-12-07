@@ -10,7 +10,7 @@ import random
 from tqdm import tqdm
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
-import Enumerate
+from Archive import Enumerate
 from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
 import operator
@@ -602,7 +602,6 @@ class Diversity:
         for f in res:
             fplist.append(f)
         return fplist
-
     def compfps_dask(self, fplist, compfplist, showprog=True):
         def comptaskfcn(row, compfplist):
             try:
@@ -629,8 +628,6 @@ class Diversity:
             pbar.unregister()
 
         return list(res)
-
-
 
 class Similarity:
     chksz = 10000000
@@ -696,7 +693,6 @@ class Similarity:
                 if len(bbdict[cycs[cx]]) == 0:
                     print('**ALL FAILS Cycle: '+ cycs[cx])
         return bbdict
-
     def Cluster_BBs(self, path, infiles, libname, bbspec, libspec, BBIDcolnames, SMILEScolnames, rxnschemefile, nclusters, mw_cutoff, simcolumn = 'dummy_smiles'):
         if infiles is not None:
             infilelist = infiles
@@ -738,7 +734,6 @@ class Similarity:
                 bbdict [k].to_csv (opath)
                 print (opath)
         return
-
     def Find_MostSimilarBB(self, bbsmiles, comp_bbdf, rxnschemefile, schemename, rxtntnum, retct = 1, excludelist = None, addtlcols=None):
         dummyscaff  = self.enum.Enumerate_Dummy_Scaffold (rxnschemefile, schemename, bbsmiles, rxtntnum)
         reslist = []
@@ -770,7 +765,6 @@ class Similarity:
 
             next += 1
         return outlist
-
     def TanimotoComparison (self, smiles1, smiles2 ):
         #currently hardcoded to Morgan2
         try:
@@ -848,7 +842,6 @@ class Similarity:
         print(next - start)
         start = next
         return searchdf, smilesfps
-
     def CompareMolecule(self, line, lct, cutoff, probefps, probesmiles, outfile):
         splitstr = line.split('\t')
         id = splitstr[1]
@@ -938,8 +931,7 @@ class Similarity:
                 ct = ct + 1
 
         collection.close()
-        outfile.close()
-
+        outfile.close(
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
         fields = line.split(splitchar)
         smi = fields[smilescol]
@@ -991,7 +983,6 @@ class Similarity:
 
         collection.close()
         outfile.close()
-
     def FindClosestList_SimMatch (self, testlist, complists):
         res = []
         for c in complists:
@@ -1010,3 +1001,30 @@ class Similarity:
                 sumtanscores += maxtan
             res.append (sumtanscores/tanct)
         return res
+
+
+def FPSim2_sim_matrix ():
+    from FPSim2 import FPSim2Engine
+    from FPSim2.io import create_db_file
+    # create_db_file('/Users/eric/Temp/All_ChEMBL_23_05.ss.dedup.mwfilter750.smi',
+    #                '/Users/eric/Temp/chembl.h5', 'Morgan', {'radius': 2, 'nBits': 2048}, gen_ids = True)
+
+    fp_filename = '/Users/eric/Temp/chembl.h5'
+    fpe = FPSim2Engine(fp_filename)
+    csr_matrix = fpe.symmetric_distance_matrix(0.7, n_workers=16)
+
+    # from FPSim2 import FPSim2Engine
+    #
+    # fp_filename = 'chembl_27.h5'
+    # fpe = FPSim2Engine(fp_filename)
+    #
+    # query = 'CC(=O)Oc1ccccc1C(=O)O'
+    # results = fpe.similarity(query, 0.7, n_workers=1)
+    # from FPSim2 import FPSim2Engine
+    #
+    # fp_filename = 'chembl_27.h5'
+    # fpe = FPSim2Engine(fp_filename, in_memory_fps=False)
+    #
+    # query = 'CC(=O)Oc1ccccc1C(=O)O'
+    # results = fpe.on_disk_similarity(query, 0.7, n_workers=1)
+

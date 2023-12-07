@@ -8,8 +8,6 @@ import base64
 import streamlit as st
 from st_aggrid import AgGrid, JsCode
 from st_aggrid.grid_options_builder import  GridOptionsBuilder
-from st_aggrid import GridUpdateMode, DataReturnMode
-import sys
 from streamlit import runtime
 import pandas as pd
 
@@ -27,8 +25,6 @@ def ShowMol( smiles, outtype=None):
         img = np.zeros([100, 100, 3], dtype=np.uint8)
         img.fill(255)  # or img[:] = 255
     img.save('test.png')
-    plt.imshow(img)
-    plt.show()
     if outtype == 'b64_datauri':
         buf = io.BytesIO()
         img.save(buf, format='png')
@@ -82,31 +78,23 @@ def ShowMols_StreamLit_Grid (df, smilescols = ['SMILES'], rowheight = 100):
     for s in smilescols:
         dispdf [s + '_Image'] = None
     image_render = JsCode("""function (params) {
-                         this.params = params;
-                         this.img_render = document.createElement('div');
-                         this.img_render.innerHTML = `
-                             <img src=${this.params.value}
-                                 width=""" + str(rowheight) +"""
-                                 height=""" + str(rowheight) +"""
-                             >
-                         `; 
-                         return this.img_render;
+                         var imageElement = document.createElement("img");
+                         return imageElement;
                          }""")
+
     gb = GridOptionsBuilder()
-    print(smilescols)
     for c in df.columns:
         if c not in smilescols:
             gb.configure_column(c, headerName=c, width=50)
         else:
-            print (c)
             gb.configure_column(c + "_Image", headerName=s, cellRenderer=image_render)
     for ix, row in dispdf.iterrows():
         for s in smilescols:
             print (row[s])
             if row[s] is not None:
-                 dispdf.at [ix,s + '_Image'] =ShowMol(row[s],outtype='b64_datauri')
+                 dispdf.at [ix,s + '_Image'] = ShowMol(row[s],outtype='b64_datauri')
             else:
-                 dispdf.at[ix, s + '_Image'] = None
+                 dispdf.at[ix, s + '_Image'] = ""
 
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, editable=True,
                                 enableRangeSelection=True, )

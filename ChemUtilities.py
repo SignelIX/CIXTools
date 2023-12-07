@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool as Pool
 from tqdm import tqdm
 import pandas as pd
 from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
-import Enumerate
+from Archive import Enumerate
 import pathlib
 import Chem_CalcProps
 from rdkit import RDLogger
