@@ -943,6 +943,7 @@ class Similarity:
         outfile.close()
 
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
+        #substructure search
         fields = line.split(splitchar)
         smi = fields[smilescol]
         try:
@@ -1052,7 +1053,7 @@ class CompleteScaff():
     def CompleteScaffAsync(self, res):
         if res is not None:
             self.lock.acquire()
-            res.to_csv (self.outfile , index = False, mode = self.mode)
+            res.to_csv (self.outfile , index = False, mode = self.mode, header = self.mode == 'w')
             self.mode = 'a'
             print ('complete chunk')
             self.ttlct += len (res)
@@ -1061,19 +1062,23 @@ class CompleteScaff():
         else:
             print ('RES IS NONE')
 
-def Generate_Scaffolds (filename, outpath, smilescol = 'smiles'):
-    CS = CompleteScaff (outpath)
-    chunksize = 10000
-    pool_size = NUM_WORKERS
+def Generate_Scaffolds (filename, outpath, smilescol = 'smiles', ct = -1):
+    CS = CompleteScaff(outpath)
+    chunksize = 100000
+    print ('CPUS:', CPU_COUNT)
+    pool_size = 8
     pool = ProcPool(pool_size)
-
-    reader = pd.read_csv(filename, chunksize=chunksize, low_memory=False)
+    if ct == -1:
+        reader = pd.read_csv(filename, chunksize=chunksize, low_memory=False)
+    else:
+        reader = pd.read_csv(filename, chunksize=chunksize, low_memory=False, nrows=ct)
 
     funclist = []
     num = 0
     ttlct = 0
     for df in reader:
         ttlct += len (df)
+        print (ttlct)
         print (ttlct, '           ', end ='\r')
         f = pool.apply_async(ScaffTask, args = [df, num, smilescol], callback=CS.CompleteScaffAsync)
         funclist.append(f)
