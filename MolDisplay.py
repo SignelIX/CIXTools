@@ -102,7 +102,7 @@ def ShowMols_StreamLit_Grid (df, smilescols = ['SMILES'], rowheight = 100):
     gridOptions = gb.build()
     gridOptions['rowHeight'] = rowheight
 
-    AgGrid(dispdf, allow_unsafe_jscode=True, enable_enterprise_modules=True, gridOptions=gridOptions, height=500)
+    AgGrid(dispdf, allow_unsafe_jscode=True, enable_enterprise_modules=True, gridOptions=gridOptions, height=500,custom_css={ "#gridToolBar": { "padding-bottom": "0px !important", } })
     return
 
 class Chem_ShowMols_UI:

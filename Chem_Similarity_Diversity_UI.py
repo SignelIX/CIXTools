@@ -104,12 +104,12 @@ class Chem_Similarity_DiversityUI:
                     gb.configure_column(c, headerName=c, width=50)
                 gridOptions = gb.build()
                 st.session_state['gridOptions'] = gridOptions
-                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions )
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=gridOptions, custom_css={ "#gridToolBar": { "padding-bottom": "0px !important", } } )
                 if savetofldr is not None:
                     outdf.to_csv(savetofldr + '/' + schemename + '_' + str(rxtntnum) + '.csv', index = False)
         else:
             if 'aggriddata' in  st.session_state:
-                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=st.session_state['gridOptions'],)
+                AgGrid(st.session_state['aggriddata'], enable_enterprise_modules=True,gridOptions=st.session_state['gridOptions'],custom_css={ "#gridToolBar": { "padding-bottom": "0px !important", } })
 
 
     def SaveToInit(self):

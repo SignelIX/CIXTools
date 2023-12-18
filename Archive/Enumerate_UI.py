@@ -402,7 +402,7 @@ class EnumerationUI:
                 gb.configure_selection('single')
                 gridOptions = gb.build()
                 selected = AgGrid(st.session_state['aggriddata'], update_mode='SELECTION_CHANGED',
-                                          gridOptions= gridOptions,  data_return_mode=DataReturnMode.AS_INPUT, reload_data=True)
+                                          gridOptions= gridOptions,  data_return_mode=DataReturnMode.AS_INPUT, reload_data=True, custom_css={ "#gridToolBar": { "padding-bottom": "0px !important", } })
                 if len(selected['selected_rows']) > 0:
                     for n in range(0, len(self.bbdfs) ):
                         st.session_state['bb' + str(n) + 'txt'] = selected['selected_rows'][0]['bb' + str (n+1) + '_smiles' ]
