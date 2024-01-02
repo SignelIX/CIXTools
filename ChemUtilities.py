@@ -1,7 +1,6 @@
 from rdkit.Chem import SaltRemover
 from rdkit import Chem
 from rdkit.Chem import Descriptors as Descr
-import rdkit.Chem.rdMolDescriptors as rdMolDescriptors
 import matplotlib.pyplot as plt
 from itertools import islice
 from multiprocessing.pool import ThreadPool as Pool
@@ -9,7 +8,6 @@ from tqdm import tqdm
 import pandas as pd
 from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers
 from Archive import Enumerate
-import pathlib
 import Chem_CalcProps
 from rdkit import RDLogger
 import time
@@ -411,14 +409,14 @@ def RemoveChirality (infile_or_df, outfile, smilescol):
 
 def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
     print ('starting conversion')
-    if fix ==True:
-        f=open (infile, 'rb')
-        text = f.read().decode(errors='replace')
-        f.close()
-        g = open (infile, 'w')
-        g.write (text)
-        g.close ()
-        print('fix completed')
+    # if fix == True:
+    #     f=open (infile, 'rb')
+    #     text = f.read().decode(errors='replace')
+    #     f.close()
+    #     g = open (infile, 'w')
+    #     g.write (text)
+    #     g.close ()
+    #     print('fix completed')
     currrec = ""
 
     proplist = []
@@ -435,60 +433,23 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
                        sds.SetData(currrec)
                        mol = next(sds)
                        smi = Chem.MolToSmiles(mol)
+
                        prop_dict = mol.GetPropsAsDict()
+
                        for k in prop_dict.keys ():
                            if k not in proplist:
                                proplist.append (k)
-                       outf.write (smi + ',' + prop_dict [idcol] + '\n')
+                           outf.write (smi + ',' + prop_dict [idcol] + '\n')
                        ct += 1
                    except Exception as e:
-                       print ('\n')
-                       print (e)
+                       print ('Error:'  ,  str(e))
                    currrec = ""
                 else:
                    currrec += line
+                outf.flush ()
 
-                print ('line: ' + str(ct), end = "\r")
+                print ('line: ' + str(ct), end='\r')
         print ('completed')
-    # sdf = Chem.SDMolSupplier (infile)
-    # print ('load completed')
-    # cols = []
-    # ct = 0
-    #
-    #
-    # for sdrec in sdf:
-    #     props = sdrec.GetPropsAsDict ()
-    #     for p in props:
-    #         cols.append (p)
-    #     print('pass 1 structure #' + str(ct), end='\r')
-    #     ct += 1
-    # sdf.reset ()
-    # print('pass 1 completed')
-    # ct = 0
-    # fout = open (outfile, 'w')
-    # for sdrec in sdf:
-    #     linebuffer = None
-    #     props = sdrec.GetPropsAsDict()
-    #     for p in cols:
-    #         if linebuffer is not None:
-    #             linebuffer += ','
-    #         else:
-    #             linebuffer = ''
-    #         if p in props:
-    #             linebuffer += props[p]
-    #     ct += 1
-    #     print ('pass 2 structure #' + str (ct) , end='\r')
-    # fout.close ()
-    # print('pass 2 completed')
-# def ConvertSDFilesFromDir (inpath, outfile):
-#     globlist = pathlib.Path(inpath).glob('*.sdf')
-#     alldf = pd.DataFrame ()
-#     for f in globlist:
-#         print (f)
-#       #  df = SDFtoDF(str(f), True)
-#         alldf = pd.concat([alldf, df], axis=0, ignore_index=True)
-#
-#     alldf.to_csv (outfile)
 
 def Canonicalize (smiles):
     RDLogger.DisableLog('rdApp.*')
@@ -498,7 +459,9 @@ def Canonicalize (smiles):
         return smiles
 
 if __name__== "__main__":
-    infile = '/Users/eric/.COVolumes/_citadel-internal/citadel-momatx/predictions/rad/231112_529/Enamine_hts_collection_202305.saltstripped.preds.csv/Enamine_hts_collection_202305.saltstripped.preds.csv'
-    outfile = '/Users/eric/Temp/enamine.Filtered.csv'
-    filterdict = {'MW_low': 275, 'MW_high': 650, 'overwrite': True}
-    Filter_File(infile, outfile, ',', filterdict, None, False, False)
+    print ('HERE')
+    infile = '/Users/eric/Enamine_screening_collection_202312.sdf'
+    outfile = '/Users/eric/Enamine_screening_collection_202312.csv'
+    SDFtoFile (infile, True, outfile)
+    # filterdict = {'MW_low': 275, 'MW_high': 650, 'overwrite': True}
+    # Filter_File(infile, outfile, ',', filterdict, None, False, False)
