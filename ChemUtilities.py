@@ -439,7 +439,7 @@ def SDFtoFile (infile, fix, outfile, idcol='idnumber' ):
                        for k in prop_dict.keys ():
                            if k not in proplist:
                                proplist.append (k)
-                           outf.write (smi + ',' + prop_dict [idcol] + '\n')
+                       outf.write (smi + ',' + prop_dict [idcol] + '\n')
                        ct += 1
                    except Exception as e:
                        print ('Error:'  ,  str(e))
@@ -460,8 +460,11 @@ def Canonicalize (smiles):
 
 if __name__== "__main__":
     print ('HERE')
-    infile = '/Users/eric/Enamine_screening_collection_202312.sdf'
-    outfile = '/Users/eric/Enamine_screening_collection_202312.csv'
-    SDFtoFile (infile, True, outfile)
-    # filterdict = {'MW_low': 275, 'MW_high': 650, 'overwrite': True}
-    # Filter_File(infile, outfile, ',', filterdict, None, False, False)
+    sdfinfile = '/Users/eric/Enamine_screening_collection_202312.sdf'
+    csvfile = '/Users/eric/Enamine_screening_collection_202312.csv'
+    ssfile = '/Users/eric/Enamine_screening_collection_202312.ss.csv'
+    outfile = '/Users/eric/Enamine_screening_collection_202312.ss.filt.csv'
+    SDFtoFile (sdfinfile, True, csvfile)
+    SaltStripFile(csvfile, 'smiles', ssfile)
+    filterdict = {'MW_low': 275, 'MW_high': 650, 'overwrite': True}
+    Filter_File(ssfile, outfile, ',', filterdict, None, False, False)
