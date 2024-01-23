@@ -941,7 +941,7 @@ class Similarity:
 
         collection.close()
         outfile.close()
-
+ #
     def SubSearch(self, hdrlist, smilescol, line, lct, ss1, splitchar):
         #substructure search
         fields = line.split(splitchar)
