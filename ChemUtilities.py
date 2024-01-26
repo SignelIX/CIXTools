@@ -303,17 +303,20 @@ class CompleteBlock ():
             self.outfile.write(blocklist [0] + '\n')
             self.removedfile.write(blocklist[1] + '\n')
             self.lock.release()
-            print ('Completing BLOCK:', self.blockct, end = '\r' )
+            print ('Completing BLOCK:', self.blockct, '          ', end = '\r' )
 
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
-    print ('Filtering')
-    N = 10000
+    print ('Filtering,', filter_dict)
+    N = 100000
     pool_size =  40
     pool = Pool(pool_size)
     outfile = open (outfilename, 'w')
     remf =open (outfilename.replace ('.csv','') + 'removed.csv', 'w')
-    ssfilters = Read_FilterFile(ss_file)
+    if 'excl_ss_smiles' in filter_dict:
+        ssfilters = Read_FilterFile(filter_dict ['excl_ss_smiles'])
+    else:
+        ssfilters = Read_FilterFile(ss_file)
     CB = CompleteBlock(outfile, remf)
 
     with open (catfile) as collection:
@@ -326,19 +329,24 @@ def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChira
         outfile.write (line + '\n')
 
         for mlist in iter(lambda: list(islice(collection, N)), []):
-            print('Starting BLOCK:', blocknum, end='\r')
+            print('Starting BLOCK: ', blocknum, '           ', end='\r')
             blocknum +=1
             pool.apply_async(Process_Block, args=(mlist, smilescol, splitchar,  filter_dict, ssfilters, useChirality, AmbigChirality, Keep, blocknum), callback=CB.CompleteBlockAsync)
+
         pool.close()
         pool.join()
 
     collection.close ()
     outfile.close ()
+    print('Filtering Complete, ' , outfilename)
 
-def Read_FilterFile (filter_file):
-    if filter_file is None:
+def Read_FilterFile (filter_file_or_list):
+    if filter_file_or_list is None:
         return None
-    ss_filters = pd.read_csv(filter_file)
+    if type (filter_file_or_list) is list:
+        ss_filters = pd.DataFrame (filter_file_or_list, columns = ['SMILES'])
+    else:
+        ss_filters = pd.read_csv(filter_file_or_list)
     ss_filters = ss_filters.assign(SS_ct=0, Molecule=None)
     for idx, row in ss_filters.iterrows():
         mol = Chem.MolFromSmarts(row['SMILES'])
