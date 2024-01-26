@@ -308,7 +308,7 @@ class CompleteBlock ():
 
 def Filter_File (catfile, outfilename, splitchar, filter_dict, ss_file, useChirality, AmbigChirality, Keep = False, smilescol = 'SMILES'):
     print ('Filtering,', filter_dict)
-    N = 100000
+    N = 10000
     pool_size =  40
     pool = Pool(pool_size)
     outfile = open (outfilename, 'w')
