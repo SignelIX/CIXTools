@@ -302,6 +302,8 @@ class CompleteBlock ():
             self.blockct = self.blockct + 1
             self.outfile.write(blocklist [0] + '\n')
             self.removedfile.write(blocklist[1] + '\n')
+            self.removedfile.flush ()
+            self.outfile.flush ()
             self.lock.release()
             print ('Completing BLOCK:', self.blockct, '          ', end = '\r' )
 
