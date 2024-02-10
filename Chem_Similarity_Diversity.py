@@ -1078,7 +1078,6 @@ def Generate_Scaffolds (filename, outpath, smilescol = 'smiles', ct = -1):
     ttlct = 0
     for df in reader:
         ttlct += len (df)
-        print (ttlct)
         print (ttlct, '           ', end ='\r')
         f = pool.apply_async(ScaffTask, args = [df, num, smilescol], callback=CS.CompleteScaffAsync)
         funclist.append(f)
